@@ -1,0 +1,19 @@
+pdfplumber>=0.11.0          # Extração de texto digital + tabelas
+pypdf>=4.0.0                # Manipulação de PDFs
+pdf2image>=1.17.0           # Converter PDF para imagem
+Pillow>=10.0.0              # Processamento de imagem
+
+opencv-python>=4.9.0        # Deskew, binarização, filtros
+numpy>=1.24.0               # Arrays e operações numéricas
+scikit-image>=0.22.0        # Algoritmos de imagem avançados
+
+torch>=2.0.0                # PyTorch com suporte ROCm
+python-doctr>=0.8.0         # OCR + Layout detection (PyTorch)
+transformers>=4.35.0        # Modelos Hugging Face (opcional)
+
+camelot-py[base]>=0.11.0    # Tabelas de PDFs digitais
+ghostscript                 # Dependência do camelot (instalar via sistema)
+
+tqdm>=4.66.0                # Barras de progresso
+pydantic>=2.5.0             # Validação de schema JSON
+python-dotenv>=1.0.0        # Configurações
