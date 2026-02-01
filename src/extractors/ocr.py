@@ -48,6 +48,31 @@ class DocTREngine:
         if config.VERBOSE:
             print(f"DocTR Engine inicializado no device: {self.device}")
     
+    def _prepare_image(self, image: np.ndarray) -> np.ndarray:
+        """
+        Prepara uma imagem para processamento pelo docTR.
+        
+        Args:
+            image: imagem como numpy array
+        
+        Returns:
+            imagem preparada (RGB, uint8)
+        """
+        # docTR espera imagem RGB
+        if len(image.shape) == 2:
+            # Converte grayscale para RGB (não recomendado, mas suporta)
+            image = np.stack([image, image, image], axis=-1)
+        
+        # Remove canal alpha se presente
+        if len(image.shape) == 3 and image.shape[2] == 4:
+            image = image[:, :, :3]
+        
+        # docTR espera valores 0-255 uint8
+        if image.dtype != np.uint8:
+            image = image.astype(np.uint8)
+        
+        return image
+    
     def extract_from_image(self, image: np.ndarray) -> dict:
         """
         Extrai texto de uma imagem
@@ -58,17 +83,31 @@ class DocTREngine:
         Returns:
             resultado do docTR
         """
-        # docTR espera imagem RGB
-        if len(image.shape) == 2:
-            # Converte grayscale para RGB (não recomendado, mas suporta)
-            image = np.stack([image, image, image], axis=-1)
+        prepared = self._prepare_image(image)
+        result = self.model([prepared])
+        return result
+    
+    def extract_from_images_batch(self, images: List[np.ndarray]) -> dict:
+        """
+        Extrai texto de múltiplas imagens em batch.
         
-        # docTR espera valores 0-255 uint8
-        if image.dtype != np.uint8:
-            image = image.astype(np.uint8)
+        Mais eficiente que processar uma imagem por vez, especialmente com GPU.
+        O docTR internamente faz batching para maximizar throughput.
         
-        # Executa OCR
-        result = self.model([image])
+        Args:
+            images: lista de imagens como numpy arrays RGB
+        
+        Returns:
+            resultado do docTR com múltiplas páginas
+        """
+        if not images:
+            return None
+        
+        # Prepara todas as imagens
+        prepared_images = [self._prepare_image(img) for img in images]
+        
+        # Processa batch
+        result = self.model(prepared_images)
         
         return result
 

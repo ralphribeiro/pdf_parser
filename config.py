@@ -48,6 +48,11 @@ CAMELOT_FLAVOR = 'lattice'  # 'lattice' ou 'stream'
 IMAGE_AREA_THRESHOLD = 0.3  # % mínimo de área de imagem para considerar possível scan
 TEXT_COVERAGE_THRESHOLD = 0.05  # % mínimo de cobertura de texto para considerar digital puro
 
+# Paralelização
+PARALLEL_ENABLED = True  # Habilitar processamento paralelo
+PARALLEL_WORKERS = None  # Número de workers para páginas digitais (None = auto, usa cpu_count)
+PARALLEL_MIN_PAGES = 4  # Mínimo de páginas para ativar paralelização (overhead não compensa para poucos)
+
 # Debug
 SAVE_PREPROCESSED_IMAGES = False  # Salvar imagens pré-processadas para debug
 VERBOSE = True
