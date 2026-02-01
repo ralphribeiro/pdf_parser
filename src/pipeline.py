@@ -1,9 +1,13 @@
 """
 Pipeline principal para processamento de PDFs
+
+Suporta múltiplos engines de OCR:
+- doctr: Deep learning (PyTorch), rápido com GPU
+- tesseract: LSTM tradicional, bom para português
 """
 import pdfplumber
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime
 from tqdm import tqdm
 
@@ -11,35 +15,75 @@ import config
 from src.models.schemas import Document, Page, Block
 from src.detector import detect_page_type, get_page_dimensions
 from src.extractors.digital import extract_digital_page
-from src.extractors.ocr import extract_ocr_page, OCREngine
+from src.extractors.ocr import extract_ocr_page, OCREngine, DocTREngine
 from src.extractors.tables import extract_tables_digital
+from src.utils.ocr_postprocess import postprocess_ocr_text
+
+# Importação condicional do Tesseract
+try:
+    from src.extractors.ocr_tesseract import extract_ocr_page_tesseract, TesseractEngine
+    TESSERACT_AVAILABLE = True
+except ImportError:
+    TESSERACT_AVAILABLE = False
+    TesseractEngine = None
+    extract_ocr_page_tesseract = None
 
 
 class DocumentProcessor:
     """
     Orquestrador principal do pipeline de extração
+    
+    Suporta múltiplos engines de OCR configuráveis via config.OCR_ENGINE
     """
     
-    def __init__(self, use_gpu: bool = None):
+    def __init__(self, use_gpu: bool = None, ocr_engine: str = None):
         """
         Inicializa o processador
         
         Args:
             use_gpu: usar GPU para OCR (se None, usa config.USE_GPU)
+            ocr_engine: 'doctr' ou 'tesseract' (se None, usa config.OCR_ENGINE)
         """
         self.use_gpu = use_gpu if use_gpu is not None else config.USE_GPU
+        self.ocr_engine_type = ocr_engine or getattr(config, 'OCR_ENGINE', 'doctr')
         
-        # Inicializa engine OCR (carrega modelo na GPU)
+        # Inicializa engine OCR baseado na configuração
         self.ocr_engine = None
-        if self.use_gpu:
-            try:
-                self.ocr_engine = OCREngine()
+        self.tesseract_engine = None
+        
+        if self.ocr_engine_type == 'tesseract':
+            if TESSERACT_AVAILABLE:
+                try:
+                    self.tesseract_engine = TesseractEngine()
+                    if config.VERBOSE:
+                        print(f"Tesseract Engine inicializado: lang={self.tesseract_engine.lang}")
+                except Exception as e:
+                    if config.VERBOSE:
+                        print(f"Erro ao inicializar Tesseract, usando docTR: {e}")
+                    self._init_doctr_engine()
+            else:
                 if config.VERBOSE:
-                    print(f"OCR Engine inicializado com GPU: {config.DEVICE}")
-            except Exception as e:
-                if config.VERBOSE:
-                    print(f"Erro ao inicializar GPU, usando CPU: {e}")
-                self.ocr_engine = OCREngine(device='cpu')
+                    print("Tesseract não disponível, usando docTR")
+                self._init_doctr_engine()
+        else:
+            self._init_doctr_engine()
+    
+    def _init_doctr_engine(self):
+        """Inicializa engine docTR"""
+        try:
+            device = 'cuda' if self.use_gpu else 'cpu'
+            self.ocr_engine = DocTREngine(device=device)
+            self.ocr_engine_type = 'doctr'
+        except Exception as e:
+            if config.VERBOSE:
+                print(f"Erro ao inicializar docTR com GPU: {e}")
+            # Tenta CPU se GPU falhou
+            if self.use_gpu:
+                try:
+                    self.ocr_engine = DocTREngine(device='cpu')
+                except Exception as e2:
+                    if config.VERBOSE:
+                        print(f"Erro crítico ao inicializar OCR: {e2}")
     
     def process_document(self, pdf_path: str, doc_id: Optional[str] = None,
                         extract_tables: bool = True,
@@ -164,13 +208,12 @@ class DocumentProcessor:
                         print(f"Aviso: erro ao extrair tabelas da página {page_number}: {e}")
         
         else:  # scan ou hybrid -> usar OCR
-            blocks, width, height = extract_ocr_page(
-                pdf_path,
-                page_number,
-                preprocess=True,
-                ocr_engine=self.ocr_engine
-            )
+            blocks, width, height = self._extract_with_ocr(pdf_path, page_number)
             source = "ocr"
+            
+            # Aplica pós-processamento se configurado
+            if getattr(config, 'OCR_POSTPROCESS', True):
+                blocks = self._postprocess_ocr_blocks(blocks)
         
         # Cria objeto Page
         page = Page(
@@ -182,6 +225,60 @@ class DocumentProcessor:
         )
         
         return page
+    
+    def _extract_with_ocr(self, pdf_path: str, page_number: int):
+        """
+        Extrai conteúdo usando o engine OCR configurado
+        """
+        if self.ocr_engine_type == 'tesseract' and self.tesseract_engine is not None:
+            return extract_ocr_page_tesseract(
+                pdf_path,
+                page_number,
+                ocr_engine=self.tesseract_engine
+            )
+        else:
+            return extract_ocr_page(
+                pdf_path,
+                page_number,
+                preprocess=False,  # NÃO usar pré-processamento - degrada qualidade
+                ocr_engine=self.ocr_engine
+            )
+    
+    def _postprocess_ocr_blocks(self, blocks: list) -> list:
+        """
+        Aplica pós-processamento em blocos extraídos por OCR
+        """
+        fix_errors = getattr(config, 'OCR_FIX_ERRORS', True)
+        min_line = getattr(config, 'OCR_MIN_LINE_LENGTH', 3)
+        
+        processed_blocks = []
+        for block in blocks:
+            if block.text:
+                # Aplica pós-processamento no texto
+                cleaned_text = postprocess_ocr_text(
+                    block.text,
+                    clean=True,
+                    fix_errors=fix_errors,
+                    merge_words=False,  # Pode causar problemas, desativado
+                    min_line_length=min_line
+                )
+                
+                # Só mantém bloco se ainda tiver texto após limpeza
+                if cleaned_text and len(cleaned_text.strip()) >= 2:
+                    # Cria novo bloco com texto limpo
+                    processed_blocks.append(Block(
+                        block_id=block.block_id,
+                        type=block.type,
+                        text=cleaned_text,
+                        bbox=block.bbox,
+                        confidence=block.confidence,
+                        rows=block.rows
+                    ))
+            else:
+                # Blocos sem texto (tabelas) passam direto
+                processed_blocks.append(block)
+        
+        return processed_blocks
     
     def _remove_overlapping_text_blocks(self, text_blocks: list[Block],
                                        table_blocks: list[Block],

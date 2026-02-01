@@ -10,6 +10,7 @@ scikit-image>=0.22.0        # Algoritmos de imagem avançados
 torch>=2.0.0                # PyTorch com suporte ROCm
 python-doctr>=0.8.0         # OCR + Layout detection (PyTorch)
 transformers>=4.35.0        # Modelos Hugging Face (opcional)
+pytesseract>=0.3.10         # Interface Python para Tesseract OCR (opcional)
 
 camelot-py[base]>=0.11.0    # Tabelas de PDFs digitais
 ghostscript                 # Dependência do camelot (instalar via sistema)

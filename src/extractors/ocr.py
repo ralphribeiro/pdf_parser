@@ -1,5 +1,9 @@
 """
 Extrator OCR usando docTR (PyTorch)
+
+IMPORTANTE: O docTR faz seu próprio pré-processamento internamente.
+Passar imagem binarizada/grayscale DEGRADA a qualidade do OCR.
+Sempre passar imagem RGB original em alta resolução.
 """
 import numpy as np
 from PIL import Image
@@ -9,12 +13,16 @@ import config
 from src.models.schemas import Block, BlockType
 from src.utils.bbox import normalize_bbox, sort_blocks_by_position
 from src.utils.text_normalizer import normalize_text
-from src.preprocessing import preprocess_image
 
 
-class OCREngine:
+class DocTREngine:
     """
-    Engine OCR usando docTR
+    Engine OCR usando docTR (mindee/doctr)
+    
+    Melhores práticas:
+    - Passar imagem RGB original (NÃO binarizada)
+    - DPI alto (300-400) melhora qualidade
+    - assume_straight_pages=True é mais rápido se documentos não estão rotacionados
     """
     def __init__(self, device: str = None):
         """
@@ -27,32 +35,32 @@ class OCREngine:
         
         self.device = device or config.DEVICE
         
-        # Carrega modelo docTR
+        # Carrega modelo docTR com configuração otimizada
         # det_arch: arquitetura de detecção de texto
         # reco_arch: arquitetura de reconhecimento de texto
         self.model = ocr_predictor(
             det_arch='db_resnet50',
             reco_arch='crnn_vgg16_bn',
             pretrained=True,
-            assume_straight_pages=False  # suporta páginas rotacionadas
+            assume_straight_pages=True  # Mais rápido para documentos não rotacionados
         ).to(self.device)
         
         if config.VERBOSE:
-            print(f"OCR Engine inicializado no device: {self.device}")
+            print(f"DocTR Engine inicializado no device: {self.device}")
     
     def extract_from_image(self, image: np.ndarray) -> dict:
         """
         Extrai texto de uma imagem
         
         Args:
-            image: imagem como numpy array (RGB ou grayscale)
+            image: imagem como numpy array RGB (NÃO passar grayscale/binarizada!)
         
         Returns:
             resultado do docTR
         """
         # docTR espera imagem RGB
         if len(image.shape) == 2:
-            # Converte grayscale para RGB
+            # Converte grayscale para RGB (não recomendado, mas suporta)
             image = np.stack([image, image, image], axis=-1)
         
         # docTR espera valores 0-255 uint8
@@ -65,27 +73,34 @@ class OCREngine:
         return result
 
 
+# Alias para compatibilidade
+OCREngine = DocTREngine
+
+
 def extract_ocr_page(pdf_path: str, page_number: int, 
-                    preprocess: bool = True,
-                    ocr_engine: Optional[OCREngine] = None) -> Tuple[List[Block], float, float]:
+                    preprocess: bool = False,  # DESATIVADO por padrão - degrada qualidade
+                    ocr_engine: Optional[DocTREngine] = None) -> Tuple[List[Block], float, float]:
     """
     Extrai conteúdo de uma página usando OCR
     
     Args:
         pdf_path: caminho para o PDF
         page_number: número da página (1-indexed)
-        preprocess: aplicar pré-processamento na imagem
+        preprocess: NÃO USAR - mantido para compatibilidade
         ocr_engine: engine OCR (se None, cria um novo)
     
     Returns:
         (blocos, largura, altura)
     """
-    # Converte página para imagem
+    # Converte página para imagem em alta resolução
+    # DPI alto é crucial para qualidade do OCR
+    dpi = getattr(config, 'OCR_DPI', config.IMAGE_DPI)
+    
     images = convert_from_path(
         pdf_path,
         first_page=page_number,
         last_page=page_number,
-        dpi=config.IMAGE_DPI
+        dpi=dpi
     )
     
     if not images:
@@ -94,20 +109,23 @@ def extract_ocr_page(pdf_path: str, page_number: int,
     image = images[0]
     page_width, page_height = image.size
     
-    # Pré-processamento
-    if preprocess:
-        image_array = preprocess_image(image)
-        # Converte de volta para PIL para compatibilidade
-        image_pil = Image.fromarray(image_array)
-    else:
-        image_pil = image
+    # IMPORTANTE: Passar imagem RGB original SEM pré-processamento
+    # O docTR faz seu próprio pré-processamento otimizado internamente
+    # Binarização/grayscale DEGRADA a qualidade do OCR
+    image_array = np.array(image)
     
-    # Converte para numpy array RGB
-    image_array = np.array(image_pil)
+    # Fecha imagem PIL para evitar memory leak
+    # (pdf2image/Poppler mantém referências internas)
+    image.close()
+    del images
+    
+    # Garante que é RGB (não RGBA)
+    if len(image_array.shape) == 3 and image_array.shape[2] == 4:
+        image_array = image_array[:, :, :3]
     
     # Cria engine se necessário
     if ocr_engine is None:
-        ocr_engine = OCREngine()
+        ocr_engine = DocTREngine()
     
     # Executa OCR
     result = ocr_engine.extract_from_image(image_array)
