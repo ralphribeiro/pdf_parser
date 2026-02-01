@@ -361,23 +361,32 @@ def process_pdf(pdf_path: str, output_dir: Optional[str] = None,
     Returns:
         Document processado
     """
+    import gc
+    
     processor = DocumentProcessor(use_gpu=use_gpu)
     
-    # Processa documento
-    document = processor.process_document(
-        pdf_path,
-        extract_tables=extract_tables,
-        show_progress=True
-    )
+    try:
+        # Processa documento
+        document = processor.process_document(
+            pdf_path,
+            extract_tables=extract_tables,
+            show_progress=True
+        )
+        
+        # Salva JSON
+        if output_dir is None:
+            output_dir = config.OUTPUT_DIR
+        
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        output_path = output_dir / f"{document.doc_id}.json"
+        processor.save_to_json(document, str(output_path))
+        
+        return document
     
-    # Salva JSON
-    if output_dir is None:
-        output_dir = config.OUTPUT_DIR
-    
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    output_path = output_dir / f"{document.doc_id}.json"
-    processor.save_to_json(document, str(output_path))
-    
-    return document
+    finally:
+        # Limpa recursos para evitar warning do Poppler/pdf2image
+        processor.ocr_engine = None
+        processor.tesseract_engine = None
+        gc.collect()

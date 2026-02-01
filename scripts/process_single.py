@@ -4,6 +4,7 @@ Script para processar um único PDF
 Uso: python scripts/process_single.py <caminho_do_pdf>
 """
 import sys
+import gc
 import argparse
 from pathlib import Path
 
@@ -78,6 +79,10 @@ def main():
         print(f"   - Páginas: {document.total_pages}")
         print(f"   - Blocos totais: {sum(len(p.blocks) for p in document.pages)}")
         
+        # Limpa referências para evitar warning do Poppler/pdf2image
+        del document
+        gc.collect()
+        
         return 0
     
     except Exception as e:
@@ -88,6 +93,10 @@ def main():
             traceback.print_exc()
         
         return 1
+    
+    finally:
+        # Força garbage collection para limpar objetos do Poppler
+        gc.collect()
 
 
 if __name__ == '__main__':
