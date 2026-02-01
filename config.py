@@ -15,11 +15,10 @@ USE_GPU = torch.cuda.is_available()
 
 # OCR - Configurações Gerais
 OCR_ENGINE = 'doctr'  # 'doctr' ou 'tesseract'
-OCR_DPI = 400  # DPI para conversão de PDF (maior = melhor qualidade, mais lento)
-IMAGE_DPI = 300  # Alias para compatibilidade
+OCR_DPI = 350  # DPI para conversão de PDF (maior = melhor qualidade, mais lento)
+IMAGE_DPI = 350  # Alias para compatibilidade
 MIN_CONFIDENCE = 0.3  # Confiança mínima para aceitar resultado OCR (0-1)
 OCR_BATCH_SIZE = 12  # Ajustar conforme VRAM disponível
-
 # OCR_BATCH_SIZE = 8  # Conservador, seguro
 # OCR_BATCH_SIZE = 12 # Balanceado
 # OCR_BATCH_SIZE = 16 # Agressivo, máximo throughput
