@@ -166,6 +166,26 @@ def _postprocess_blocks(blocks: list) -> list:
     return processed_blocks
 
 
+def _classify_page_worker(args: Tuple[str, int]) -> Tuple[int, str]:
+    """
+    Worker para classificar o tipo de uma página em paralelo.
+    
+    Args:
+        args: tupla (pdf_path, page_number)
+    
+    Returns:
+        tupla (page_number, page_type)
+    """
+    pdf_path, page_number = args
+    
+    try:
+        page_type = detect_page_type(pdf_path, page_number)
+        return (page_number, page_type)
+    except Exception:
+        # Em caso de erro, assume scan (mais seguro, usa OCR)
+        return (page_number, "scan")
+
+
 class DocumentProcessor:
     """
     Orquestrador principal do pipeline de extração
@@ -491,6 +511,10 @@ class DocumentProcessor:
         """
         Classifica todas as páginas do documento antes do processamento.
         
+        Usa ProcessPoolExecutor para paralelizar a classificação em documentos
+        grandes (>= 10 páginas). Para documentos menores, o overhead de
+        paralelização não compensa.
+        
         Args:
             pdf_path: caminho para o PDF
             total_pages: número total de páginas
@@ -501,17 +525,51 @@ class DocumentProcessor:
         """
         page_types = {}
         
-        iterator = range(1, total_pages + 1)
-        if show_progress:
-            iterator = tqdm(iterator, desc="Classificando", unit="pág")
+        # Threshold: só paraleliza se tiver páginas suficientes
+        min_pages_parallel = 10
         
-        for page_num in iterator:
-            try:
-                page_type = detect_page_type(pdf_path, page_num)
-                page_types[page_num] = page_type
-            except Exception:
-                # Em caso de erro, assume scan (mais seguro, usa OCR)
-                page_types[page_num] = "scan"
+        if total_pages < min_pages_parallel:
+            # Processamento sequencial (overhead de paralelização não compensa)
+            iterator = range(1, total_pages + 1)
+            if show_progress:
+                iterator = tqdm(iterator, desc="Classificando", unit="pág")
+            
+            for page_num in iterator:
+                try:
+                    page_type = detect_page_type(pdf_path, page_num)
+                    page_types[page_num] = page_type
+                except Exception:
+                    page_types[page_num] = "scan"
+        else:
+            # Processamento paralelo
+            num_workers = getattr(config, 'PARALLEL_WORKERS', None)
+            if num_workers is None:
+                num_workers = min(multiprocessing.cpu_count(), total_pages, 8)
+            
+            worker_args = [(pdf_path, page_num) for page_num in range(1, total_pages + 1)]
+            
+            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                futures = {
+                    executor.submit(_classify_page_worker, args): args[1]
+                    for args in worker_args
+                }
+                
+                if show_progress:
+                    pbar = tqdm(total=total_pages, desc="Classificando", unit="pág")
+                
+                for future in as_completed(futures):
+                    try:
+                        page_num, page_type = future.result()
+                        page_types[page_num] = page_type
+                    except Exception:
+                        page_num = futures[future]
+                        page_types[page_num] = "scan"
+                    
+                    if show_progress:
+                        pbar.update(1)
+                
+                if show_progress:
+                    pbar.close()
         
         return page_types
     
