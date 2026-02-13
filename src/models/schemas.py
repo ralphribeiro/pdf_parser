@@ -52,6 +52,7 @@ class Block(BaseModel):
     bbox: List[float] = Field(description="Bounding box [x1, y1, x2, y2] normalizado")
     confidence: float = Field(ge=0.0, le=1.0, default=1.0, description="Confiança da extração")
     rows: Optional[List[List[str]]] = Field(default=None, description="Linhas da tabela (se type=table)")
+    lines: Optional[List[dict]] = Field(default=None, description="Linhas individuais com bbox: [{'text': str, 'bbox': [x1,y1,x2,y2]}]")
     
     class Config:
         use_enum_values = True

@@ -502,6 +502,29 @@ class DocumentProcessor:
             print(f"\n✓ JSON salvo em: {output_path}")
             print(f"  Tamanho: {output_path.stat().st_size / 1024:.1f} KB")
     
+    def save_to_searchable_pdf(self, document: Document, pdf_path: str,
+                                output_path: str) -> None:
+        """
+        Salva PDF pesquisável com texto invisível sobreposto nas páginas OCR.
+        
+        Páginas digitais são copiadas sem alteração (já possuem texto nativo).
+        Páginas OCR recebem uma camada de texto invisível posicionado de acordo
+        com os bounding boxes extraídos pelo pipeline.
+        
+        Args:
+            document: documento processado com páginas e blocos
+            pdf_path: caminho do PDF original
+            output_path: caminho do PDF de saída
+        """
+        from src.exporters.searchable_pdf import create_searchable_pdf
+        
+        create_searchable_pdf(pdf_path, document, output_path)
+        
+        if config.VERBOSE:
+            output_path_obj = Path(output_path)
+            print(f"\n✓ PDF pesquisável salvo em: {output_path}")
+            print(f"  Tamanho: {output_path_obj.stat().st_size / 1024:.1f} KB")
+    
     # =========================================================================
     # Métodos para processamento paralelo
     # =========================================================================
@@ -609,74 +632,89 @@ class DocumentProcessor:
         
         for batch_pages in iterator:
             try:
-                # Converte páginas do batch para imagens
-                images = []
-                page_dimensions = []
-                
-                for page_num in batch_pages:
+                # Converte páginas do batch para imagens com menos chamadas ao Poppler:
+                # agrupa páginas contíguas para reduzir overhead de spawn/processo.
+                images = [None] * len(batch_pages)
+                page_dimensions = [(0, 0)] * len(batch_pages)
+                page_to_idx = {page_num: idx for idx, page_num in enumerate(batch_pages)}
+
+                sorted_pages = sorted(batch_pages)
+                ranges = []
+                start = prev = sorted_pages[0]
+                for page_num in sorted_pages[1:]:
+                    if page_num == prev + 1:
+                        prev = page_num
+                    else:
+                        ranges.append((start, prev))
+                        start = prev = page_num
+                ranges.append((start, prev))
+
+                for first_page, last_page in ranges:
                     page_images = convert_from_path(
                         pdf_path,
-                        first_page=page_num,
-                        last_page=page_num,
+                        first_page=first_page,
+                        last_page=last_page,
                         dpi=dpi
                     )
-                    if page_images:
-                        img = page_images[0]
-                        page_dimensions.append((img.size[0], img.size[1]))
-                        
+
+                    expected = last_page - first_page + 1
+                    for offset in range(expected):
+                        page_num = first_page + offset
+                        batch_idx = page_to_idx.get(page_num)
+                        if batch_idx is None or offset >= len(page_images):
+                            continue
+
+                        img = page_images[offset]
+                        page_dimensions[batch_idx] = (img.size[0], img.size[1])
+
                         # Converte para numpy array RGB
                         img_array = np.array(img)
                         if len(img_array.shape) == 3 and img_array.shape[2] == 4:
                             img_array = img_array[:, :, :3]  # Remove alpha
-                        images.append(img_array)
-                        
+                        images[batch_idx] = img_array
+
+                    for img in page_images:
                         img.close()
-                        del page_images
-                    else:
-                        images.append(None)
-                        page_dimensions.append((0, 0))
-                
-                # Filtra imagens válidas para batch OCR
-                valid_images = [img for img in images if img is not None]
-                
+                    del page_images
+
+                valid_indices = [i for i, img in enumerate(images) if img is not None]
+                valid_images = [images[i] for i in valid_indices]
+
                 if valid_images and self.ocr_engine is not None:
-                    # Processa batch com docTR
-                    batch_result = self.ocr_engine.model(valid_images)
-                    
-                    # Parseia resultados
-                    valid_idx = 0
-                    for i, page_num in enumerate(batch_pages):
-                        if images[i] is not None:
-                            width, height = page_dimensions[i]
-                            
-                            # Extrai resultado da página específica
-                            if valid_idx < len(batch_result.pages):
-                                page_result = batch_result.pages[valid_idx]
-                                blocks = self._parse_doctr_page_result(
-                                    page_result, page_num, width, height
-                                )
-                                
-                                # Aplica pós-processamento
-                                if getattr(config, 'OCR_POSTPROCESS', True):
-                                    blocks = self._postprocess_ocr_blocks(blocks)
-                                
-                                results[page_num] = Page(
-                                    page=page_num,
-                                    source="ocr",
-                                    blocks=blocks,
-                                    width=width,
-                                    height=height
-                                )
-                            else:
-                                results[page_num] = Page(
-                                    page=page_num, source="ocr", blocks=[]
-                                )
-                            
-                            valid_idx += 1
+                    # Processa batch com docTR (usa preparo interno do engine)
+                    batch_result = self.ocr_engine.extract_from_images_batch(valid_images)
+
+                    for result_idx, batch_idx in enumerate(valid_indices):
+                        page_num = batch_pages[batch_idx]
+                        width, height = page_dimensions[batch_idx]
+
+                        if batch_result is not None and result_idx < len(batch_result.pages):
+                            page_result = batch_result.pages[result_idx]
+                            blocks = self._parse_doctr_page_result(
+                                page_result, page_num, width, height
+                            )
+
+                            # Aplica pós-processamento
+                            if getattr(config, 'OCR_POSTPROCESS', True):
+                                blocks = self._postprocess_ocr_blocks(blocks)
+
+                            results[page_num] = Page(
+                                page=page_num,
+                                source="ocr",
+                                blocks=blocks,
+                                width=width,
+                                height=height
+                            )
                         else:
                             results[page_num] = Page(
                                 page=page_num, source="ocr", blocks=[]
                             )
+
+                    # Garante placeholder para páginas inválidas
+                    invalid_indices = set(range(len(batch_pages))) - set(valid_indices)
+                    for idx in invalid_indices:
+                        page_num = batch_pages[idx]
+                        results[page_num] = Page(page=page_num, source="ocr", blocks=[])
                 else:
                     # Fallback: páginas vazias
                     for page_num in batch_pages:
@@ -753,13 +791,20 @@ class DocumentProcessor:
             if confidence < config.MIN_CONFIDENCE:
                 continue
             
+            # Preserva dados por linha (texto + bbox) para overlay preciso
+            lines_data = [
+                {"text": line_text, "bbox": line_bbox}
+                for line_text, line_bbox in zip(block_text, all_line_bboxes)
+            ]
+
             from src.models.schemas import BlockType
             block = Block(
                 block_id=f"p{page_number}_b{block_counter}",
                 type=BlockType.PARAGRAPH,
                 text=text,
                 bbox=bbox,
-                confidence=confidence
+                confidence=confidence,
+                lines=lines_data
             )
             
             blocks.append(block)
@@ -964,7 +1009,8 @@ class DocumentProcessor:
 def process_pdf(pdf_path: str, output_dir: Optional[str] = None,
                extract_tables: bool = True,
                use_gpu: bool = None,
-               parallel: bool = None) -> Document:
+               parallel: bool = None,
+               save_pdf: bool = None) -> Document:
     """
     Função auxiliar para processar um PDF e salvar o resultado
     
@@ -974,6 +1020,7 @@ def process_pdf(pdf_path: str, output_dir: Optional[str] = None,
         extract_tables: extrair tabelas
         use_gpu: usar GPU
         parallel: usar processamento paralelo (se None, usa config.PARALLEL_ENABLED)
+        save_pdf: gerar PDF pesquisável (se None, usa config.SEARCHABLE_PDF)
     
     Returns:
         Document processado
@@ -1008,6 +1055,12 @@ def process_pdf(pdf_path: str, output_dir: Optional[str] = None,
         
         output_path = output_dir / f"{document.doc_id}.json"
         processor.save_to_json(document, str(output_path))
+        
+        # Salva PDF pesquisável (se habilitado)
+        should_save_pdf = save_pdf if save_pdf is not None else getattr(config, 'SEARCHABLE_PDF', False)
+        if should_save_pdf:
+            pdf_output_path = output_dir / f"{document.doc_id}_searchable.pdf"
+            processor.save_to_searchable_pdf(document, pdf_path, str(pdf_output_path))
         
         return document
     

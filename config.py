@@ -18,11 +18,15 @@ OCR_ENGINE = 'doctr'  # 'doctr' ou 'tesseract'
 OCR_DPI = 350  # DPI para conversão de PDF (maior = melhor qualidade, mais lento)
 IMAGE_DPI = 350  # Alias para compatibilidade
 MIN_CONFIDENCE = 0.3  # Confiança mínima para aceitar resultado OCR (0-1)
-OCR_BATCH_SIZE = 12  # Ajustar conforme VRAM disponível
+OCR_BATCH_SIZE = 20  # Ajustado por benchmark (melhor throughput estável neste ambiente)
 # OCR_BATCH_SIZE = 8  # Conservador, seguro
 # OCR_BATCH_SIZE = 12 # Balanceado
 # OCR_BATCH_SIZE = 16 # Agressivo, máximo throughput
 
+# OCR - Orientação de página (docTR)
+ASSUME_STRAIGHT_PAGES = True  # False = detecta texto rotacionado (mais lento, mais preciso)
+DETECT_ORIENTATION = False      # Detectar e corrigir orientação da página (0/90/180/270)
+STRAIGHTEN_PAGES = False        # Corrigir páginas inclinadas automaticamente
 
 # OCR - Tesseract (se OCR_ENGINE = 'tesseract')
 OCR_LANG = 'por'  # Idioma(s): 'por', 'por+eng', etc
@@ -47,6 +51,9 @@ CAMELOT_FLAVOR = 'lattice'  # 'lattice' ou 'stream'
 # Detecção de tipo de página (digital vs scan)
 IMAGE_AREA_THRESHOLD = 0.3  # % mínimo de área de imagem para considerar possível scan
 TEXT_COVERAGE_THRESHOLD = 0.05  # % mínimo de cobertura de texto para considerar digital puro
+
+# PDF pesquisável (searchable PDF)
+SEARCHABLE_PDF = True  # Gerar PDF com texto invisível sobreposto (pesquisável)
 
 # Paralelização
 PARALLEL_ENABLED = True  # Habilitar processamento paralelo

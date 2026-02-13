@@ -15,7 +15,12 @@ import config
 from src.pipeline import process_pdf
 
 
-def main():
+def _build_parser() -> argparse.ArgumentParser:
+    """
+    Constrói o parser de argumentos do CLI.
+    
+    Separado de main() para permitir testes unitários do argparse.
+    """
     parser = argparse.ArgumentParser(
         description='Processa um PDF e extrai conteúdo em formato JSON'
     )
@@ -49,6 +54,27 @@ def main():
         help='Modo silencioso (sem logs)'
     )
     
+    # Flag para gerar PDF pesquisável
+    pdf_group = parser.add_mutually_exclusive_group()
+    pdf_group.add_argument(
+        '--pdf',
+        action='store_true',
+        default=None,
+        dest='pdf',
+        help='Gerar PDF pesquisável (com texto invisível)'
+    )
+    pdf_group.add_argument(
+        '--no-pdf',
+        action='store_false',
+        dest='pdf',
+        help='Não gerar PDF pesquisável'
+    )
+    
+    return parser
+
+
+def main():
+    parser = _build_parser()
     args = parser.parse_args()
     
     # Configura verbosidade
@@ -71,7 +97,8 @@ def main():
             str(pdf_path),
             output_dir=args.output,
             extract_tables=not args.no_tables,
-            use_gpu=not args.no_gpu
+            use_gpu=not args.no_gpu,
+            save_pdf=args.pdf,
         )
         
         print(f"\n✅ Processamento concluído com sucesso!")

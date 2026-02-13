@@ -15,6 +15,11 @@ pytesseract>=0.3.10         # Interface Python para Tesseract OCR (opcional)
 camelot-py[base]>=0.11.0    # Tabelas de PDFs digitais
 ghostscript                 # Dependência do camelot (instalar via sistema)
 
+reportlab>=4.0.0            # Geração de PDF (overlay de texto pesquisável)
+
 tqdm>=4.66.0                # Barras de progresso
 pydantic>=2.5.0             # Validação de schema JSON
 python-dotenv>=1.0.0        # Configurações
+
+# Dev / Testes
+pytest>=8.0.0               # Framework de testes

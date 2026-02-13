@@ -22,7 +22,11 @@ class DocTREngine:
     Melhores práticas:
     - Passar imagem RGB original (NÃO binarizada)
     - DPI alto (300-400) melhora qualidade
-    - assume_straight_pages=True é mais rápido se documentos não estão rotacionados
+    
+    Configuração de orientação (via config.py):
+    - ASSUME_STRAIGHT_PAGES=False: detecta texto rotacionado (mais preciso, mais lento)
+    - DETECT_ORIENTATION=True: detecta e corrige orientação da página (0/90/180/270)
+    - STRAIGHTEN_PAGES=True: corrige páginas inclinadas automaticamente
     """
     def __init__(self, device: str = None):
         """
@@ -35,6 +39,11 @@ class DocTREngine:
         
         self.device = device or config.DEVICE
         
+        # Configuração de orientação de página
+        assume_straight = getattr(config, 'ASSUME_STRAIGHT_PAGES', False)
+        detect_orient = getattr(config, 'DETECT_ORIENTATION', True)
+        straighten = getattr(config, 'STRAIGHTEN_PAGES', True)
+        
         # Carrega modelo docTR com configuração otimizada
         # det_arch: arquitetura de detecção de texto
         # reco_arch: arquitetura de reconhecimento de texto
@@ -42,11 +51,21 @@ class DocTREngine:
             det_arch='db_resnet50',
             reco_arch='crnn_vgg16_bn',
             pretrained=True,
-            assume_straight_pages=True  # Mais rápido para documentos não rotacionados
+            assume_straight_pages=assume_straight,
+            detect_orientation=detect_orient,
+            straighten_pages=straighten,
         ).to(self.device)
         
         if config.VERBOSE:
-            print(f"DocTR Engine inicializado no device: {self.device}")
+            orient_info = []
+            if not assume_straight:
+                orient_info.append("rotação detectada")
+            if detect_orient:
+                orient_info.append("orientação auto")
+            if straighten:
+                orient_info.append("endireitamento auto")
+            orient_str = f" ({', '.join(orient_info)})" if orient_info else ""
+            print(f"DocTR Engine inicializado no device: {self.device}{orient_str}")
     
     def _prepare_image(self, image: np.ndarray) -> np.ndarray:
         """
@@ -244,12 +263,19 @@ def _parse_doctr_result(result, page_number: int, page_width: float,
             if confidence < config.MIN_CONFIDENCE:
                 continue
             
+            # Preserva dados por linha (texto + bbox) para overlay preciso
+            lines_data = [
+                {"text": line_text, "bbox": line_bbox}
+                for line_text, line_bbox in zip(block_text, all_line_bboxes)
+            ]
+
             block = Block(
                 block_id=f"p{page_number}_b{block_counter}",
                 type=BlockType.PARAGRAPH,
                 text=text,
                 bbox=bbox,
-                confidence=confidence
+                confidence=confidence,
+                lines=lines_data
             )
             
             blocks.append(block)
