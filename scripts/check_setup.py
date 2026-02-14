@@ -105,5 +105,5 @@ def check_setup():
 
 
 if __name__ == "__main__":
-    success = check_setup()
-    sys.exit(0 if success else 1)
+    ALL_OK = check_setup()
+    sys.exit(0 if ALL_OK else 1)

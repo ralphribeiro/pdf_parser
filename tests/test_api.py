@@ -37,7 +37,7 @@ def mock_processor(sample_document):
         import json
 
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(document.to_json_dict(), f)
 
     def fake_save_pdf(document, pdf_path, output_path):

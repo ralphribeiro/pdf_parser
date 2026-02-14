@@ -85,9 +85,13 @@ def deskew_image(image: np.ndarray, max_angle: float = 10.0) -> np.ndarray:
     # Rotate image
     (h, w) = image.shape[:2]
     center = (w // 2, h // 2)
-    M = cv2.getRotationMatrix2D(center, rotation_angle, 1.0)
+    rotation_matrix = cv2.getRotationMatrix2D(center, rotation_angle, 1.0)
     rotated = cv2.warpAffine(
-        image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
+        image,
+        rotation_matrix,
+        (w, h),
+        flags=cv2.INTER_CUBIC,
+        borderMode=cv2.BORDER_REPLICATE,
     )
 
     return rotated
