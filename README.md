@@ -293,7 +293,7 @@ docker compose down
 
 ## Performance
 
-Tested with a 353-page PDF (27 MB):
+Tested with a 353-page PDF (27 MB) (248 digital pages, 105 OCR pages, JSON output: 591 blocks, 27 tables):
 - **Time**: ~5.5 minutes (AMD Ryzen CPU + RX 7900 XT GPU)
 - **Average speed**: ~1.2 pages/second
 - **JSON output**: 754 KB (591 blocks, 27 tables)
