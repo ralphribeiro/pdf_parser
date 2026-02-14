@@ -1,6 +1,6 @@
-# Document Parser Pipeline
+# Document Parser Pipeline (otimizado para ROCm)
 
-Pipeline local para extração de texto e estrutura de PDFs mistos (digitais e escaneados), com saída em formato JSON.
+Pipeline local para extração de texto e estrutura de PDFs mistos (digitais e escaneados), com saída em formato JSON. Otimizado para ROCm.
 
 ## Características
 
