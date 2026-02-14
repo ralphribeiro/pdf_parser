@@ -26,6 +26,7 @@ ENV/
 
 # Output
 output/*.json
+output/*.pdf
 
 # Recursos (PDFs grandes)
 resource/*.pdf
@@ -41,3 +42,6 @@ Thumbs.db
 
 # docTR models cache
 .cache/doctr/
+
+# Environment
+.env

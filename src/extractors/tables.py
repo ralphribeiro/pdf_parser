@@ -1,12 +1,17 @@
 """
 Extrator de tabelas de PDFs (digitais e scaneados)
 """
+import logging
+from typing import List, Optional, Tuple
+
 import camelot
 import numpy as np
-from typing import List, Optional, Tuple
+
+import config
 from src.models.schemas import Block, BlockType
 from src.utils.bbox import normalize_bbox
-import config
+
+logger = logging.getLogger(__name__)
 
 
 def extract_tables_digital(pdf_path: str, page_number: int, 
@@ -85,8 +90,7 @@ def extract_tables_digital(pdf_path: str, page_number: int,
             blocks.append(block)
     
     except Exception as e:
-        if config.VERBOSE:
-            print(f"Erro ao extrair tabelas da página {page_number}: {e}")
+        logger.warning("Erro ao extrair tabelas da página %d: %s", page_number, e)
     
     return blocks
 

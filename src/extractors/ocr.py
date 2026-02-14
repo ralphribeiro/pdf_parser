@@ -5,14 +5,19 @@ IMPORTANTE: O docTR faz seu próprio pré-processamento internamente.
 Passar imagem binarizada/grayscale DEGRADA a qualidade do OCR.
 Sempre passar imagem RGB original em alta resolução.
 """
+import logging
+from typing import List, Optional, Tuple
+
 import numpy as np
-from PIL import Image
-from typing import List, Tuple, Optional
 from pdf2image import convert_from_path
+from PIL import Image
+
 import config
 from src.models.schemas import Block, BlockType
 from src.utils.bbox import normalize_bbox, sort_blocks_by_position
 from src.utils.text_normalizer import normalize_text
+
+logger = logging.getLogger(__name__)
 
 
 class DocTREngine:
@@ -56,16 +61,15 @@ class DocTREngine:
             straighten_pages=straighten,
         ).to(self.device)
         
-        if config.VERBOSE:
-            orient_info = []
-            if not assume_straight:
-                orient_info.append("rotação detectada")
-            if detect_orient:
-                orient_info.append("orientação auto")
-            if straighten:
-                orient_info.append("endireitamento auto")
-            orient_str = f" ({', '.join(orient_info)})" if orient_info else ""
-            print(f"DocTR Engine inicializado no device: {self.device}{orient_str}")
+        orient_info = []
+        if not assume_straight:
+            orient_info.append("rotação detectada")
+        if detect_orient:
+            orient_info.append("orientação auto")
+        if straighten:
+            orient_info.append("endireitamento auto")
+        orient_str = f" ({', '.join(orient_info)})" if orient_info else ""
+        logger.info("DocTR Engine inicializado no device: %s%s", self.device, orient_str)
     
     def _prepare_image(self, image: np.ndarray) -> np.ndarray:
         """

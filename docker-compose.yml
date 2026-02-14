@@ -1,0 +1,47 @@
+# =============================================================================
+# Docker Compose para Doc Parser API com ROCm (AMD GPU)
+#
+# Uso:
+#   docker compose up --build
+#   curl -X POST http://localhost:8000/process -F "file=@documento.pdf"
+#
+# Requisitos do host:
+#   - Driver amdgpu + ROCm instalados
+#   - Usuário no grupo video e render
+# =============================================================================
+
+services:
+  doc-parser:
+    build: .
+    container_name: doc-parser-api
+    ports:
+      - "8000:8000"
+
+    # Volume para output persistente
+    volumes:
+      - ./output:/app/output
+
+    # Acesso à GPU AMD via ROCm
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - video
+      - render
+
+    # Recomendações ROCm (quick-start AMD)
+    ipc: host
+    security_opt:
+      - seccomp=unconfined
+    shm_size: "8g"
+
+    # Variáveis de ambiente
+    env_file:
+      - .env
+    environment:
+      # gfx1100 = RDNA3 (RX 7900 XT) — safety net para ROCm < 7.2
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0
+      # Otimização de alocação de memória PyTorch
+      - PYTORCH_HIP_ALLOC_CONF=max_split_size_mb:512
+
+    restart: unless-stopped

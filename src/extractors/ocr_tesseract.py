@@ -11,14 +11,19 @@ Requisitos:
 - Sistema: tesseract-ocr, tesseract-ocr-por
 - Python: pytesseract
 """
+import logging
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
-from PIL import Image
-from typing import List, Tuple, Optional, Dict, Any
 from pdf2image import convert_from_path
+from PIL import Image
+
 import config
 from src.models.schemas import Block, BlockType
 from src.utils.bbox import normalize_bbox, sort_blocks_by_position
 from src.utils.text_normalizer import normalize_text
+
+logger = logging.getLogger(__name__)
 
 
 class TesseractEngine:
@@ -48,8 +53,7 @@ class TesseractEngine:
         # Verifica se Tesseract está instalado
         try:
             version = pytesseract.get_tesseract_version()
-            if config.VERBOSE:
-                print(f"Tesseract Engine inicializado: v{version}, lang={self.lang}")
+            logger.info("Tesseract Engine inicializado: v%s, lang=%s", version, self.lang)
         except Exception as e:
             raise RuntimeError(
                 f"Tesseract não encontrado. Instale com:\n"

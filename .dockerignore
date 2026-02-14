@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.venv
+venv
+
+# IDE
+.vscode
+.idea
+.cursor
+*.swp
+
+# Testes (não necessários no container)
+tests/
+.pytest_cache
+
+# Arquivos locais
+.env
+*.log
+*.tmp
+
+# PDFs e outputs (montados via volume)
+resource/*.pdf
+output/
+
+# Docs
+*.md
+plan.md
