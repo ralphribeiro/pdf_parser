@@ -172,25 +172,42 @@ LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
-def setup_logging() -> None:
+def _resolve_log_level() -> int:
     """
-    Configura logging padrão do projeto.
+    Determina o nível de log efetivo.
 
-    Nível é determinado por:
+    Prioridade:
     1. DOC_PARSER_LOG_LEVEL (se definido): DEBUG, INFO, WARNING, ERROR
     2. VERBOSE=True  → INFO
     3. VERBOSE=False → WARNING
     """
     if LOG_LEVEL and hasattr(logging, LOG_LEVEL):
-        level = getattr(logging, LOG_LEVEL)
-    elif VERBOSE:
-        level = logging.INFO
-    else:
-        level = logging.WARNING
+        return getattr(logging, LOG_LEVEL)
+    return logging.INFO if VERBOSE else logging.WARNING
 
+
+def setup_logging() -> None:
+    """
+    Configura logging padrão do projeto e alinha os loggers do uvicorn.
+
+    Garante que toda saída (aplicação + uvicorn.error + uvicorn.access)
+    use o mesmo formato e nível.
+    """
+    level = _resolve_log_level()
+    formatter = logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+
+    # Root logger (aplicação)
     logging.basicConfig(
         level=level,
         format=LOG_FORMAT,
         datefmt=LOG_DATE_FORMAT,
         force=True,
     )
+
+    # Uvicorn loggers — usam handlers próprios com formato diferente.
+    # Sobrescreve formatter e nível para alinhar com o projeto.
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        uv_logger = logging.getLogger(name)
+        uv_logger.setLevel(level)
+        for handler in uv_logger.handlers:
+            handler.setFormatter(formatter)

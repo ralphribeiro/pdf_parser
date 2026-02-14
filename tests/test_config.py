@@ -7,6 +7,7 @@ DOC_PARSER_ e mantém backward-compat com a interface de módulo.
 """
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -16,10 +17,16 @@ def _reload_config():
     Recarrega o módulo config para aplicar novas env vars.
 
     Necessário porque Python cacheia módulos em sys.modules.
+    Mock de load_dotenv impede que o arquivo .env local
+    interfira nos testes (só env vars explícitas contam).
     """
     if "config" in sys.modules:
         del sys.modules["config"]
-    import config
+
+    import dotenv
+
+    with patch.object(dotenv, "load_dotenv", return_value=False):
+        import config
 
     return config
 

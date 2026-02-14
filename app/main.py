@@ -33,6 +33,9 @@ async def lifespan(app: FastAPI):
     Shutdown: libera recursos e limpa memória.
     """
     # --- Startup ---
+    # Re-aplica logging após uvicorn ter criado seus handlers
+    config.setup_logging()
+
     logger.info("Inicializando DocumentProcessor (device=%s)...", config.DEVICE)
 
     from src.pipeline import DocumentProcessor
