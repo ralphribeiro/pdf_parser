@@ -113,6 +113,15 @@ OCR_FIX_ERRORS = _env_bool("DOC_PARSER_OCR_FIX_ERRORS", True)
 OCR_MIN_LINE_LENGTH = _env_int("DOC_PARSER_OCR_MIN_LINE_LENGTH", 3)
 
 # ---------------------------------------------------------------------------
+# Reading order
+# ---------------------------------------------------------------------------
+
+# Vertical tolerance (normalised 0-1) for grouping blocks into the same
+# horizontal band.  Increase if blocks at the same visual line are being
+# split into separate bands; decrease if unrelated blocks are being merged.
+READING_ORDER_Y_TOLERANCE = _env_float("DOC_PARSER_READING_ORDER_Y_TOLERANCE", 0.008)
+
+# ---------------------------------------------------------------------------
 # Image preprocessing (DISABLED - degrades OCR quality)
 # docTR and Tesseract handle their own preprocessing internally
 # ---------------------------------------------------------------------------
