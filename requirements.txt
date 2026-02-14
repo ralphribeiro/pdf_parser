@@ -1,44 +1,44 @@
 # =============================================================================
-# Dependências Python do Doc Parser API
+# Python dependencies for Doc Parser API
 #
-# torch / torchvision NÃO estão aqui — são fornecidos pela imagem Docker
-# (rocm/pytorch). Para dev local, instale separadamente:
+# torch / torchvision are NOT included here — they are provided by the Docker
+# image (rocm/pytorch). For local dev, install separately:
 #   pip install -r requirements-torch.txt
 #   pip install -r requirements.txt
 # =============================================================================
 
-# --- PDF e Imagem ---
-pdfplumber>=0.11.0          # Extração de texto digital + tabelas
-pypdf>=4.0.0                # Manipulação de PDFs
-pdf2image>=1.17.0           # Converter PDF para imagem
-Pillow>=10.0.0              # Processamento de imagem
+# --- PDF and Image ---
+pdfplumber>=0.11.0          # Digital text extraction + tables
+pypdf>=4.0.0                # PDF manipulation
+pdf2image>=1.17.0           # Convert PDF to image
+Pillow>=10.0.0              # Image processing
 
-# --- Processamento de Imagem ---
-opencv-python>=4.9.0        # Deskew, binarização, filtros
-numpy>=1.24.0               # Arrays e operações numéricas
-scikit-image>=0.22.0        # Algoritmos de imagem avançados
+# --- Image Processing ---
+opencv-python>=4.9.0        # Deskew, binarization, filters
+numpy>=1.24.0               # Arrays and numeric operations
+scikit-image>=0.22.0        # Advanced image algorithms
 
 # --- OCR ---
 python-doctr>=0.8.0         # OCR + Layout detection (PyTorch)
-transformers>=4.35.0        # Modelos Hugging Face (opcional)
-pytesseract>=0.3.10         # Interface Python para Tesseract OCR (opcional)
+transformers>=4.35.0        # Hugging Face models (optional)
+pytesseract>=0.3.10         # Python interface for Tesseract OCR (optional)
 
-# --- Tabelas ---
-camelot-py[base]>=0.11.0    # Tabelas de PDFs digitais
-ghostscript                 # Dependência do camelot (instalar via sistema)
+# --- Tables ---
+camelot-py[base]>=0.11.0    # Tables from digital PDFs
+ghostscript                 # camelot dependency (install via system)
 
 # --- PDF Output ---
-reportlab>=4.0.0            # Geração de PDF (overlay de texto pesquisável)
+reportlab>=4.0.0            # PDF generation (searchable text overlay)
 
 # --- API ---
-fastapi>=0.115.0            # Framework web async
+fastapi>=0.115.0            # Async web framework
 uvicorn[standard]>=0.30.0   # ASGI server
-python-multipart>=0.0.9     # Upload de arquivos (FastAPI)
+python-multipart>=0.0.9     # File upload support (FastAPI)
 
-# --- Utilitários ---
-pydantic>=2.5.0             # Validação de schema JSON
-python-dotenv>=1.0.0        # Configurações via .env
+# --- Utilities ---
+pydantic>=2.5.0             # JSON schema validation
+python-dotenv>=1.0.0        # Configuration via .env
 
-# --- Dev / Testes ---
-pytest>=8.0.0               # Framework de testes
-httpx>=0.27.0               # HTTP client para testes FastAPI
+# --- Dev / Tests ---
+pytest>=8.0.0               # Test framework
+httpx>=0.27.0               # HTTP client for FastAPI tests

@@ -15,16 +15,16 @@ venv
 .cursor
 *.swp
 
-# Testes (não necessários no container)
+# Tests (not needed in container)
 tests/
 .pytest_cache
 
-# Arquivos locais
+# Local files
 .env
 *.log
 *.tmp
 
-# PDFs e outputs (montados via volume)
+# PDFs and outputs (mounted via volume)
 resource/*.pdf
 output/
 
