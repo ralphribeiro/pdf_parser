@@ -1,5 +1,5 @@
 """
-Pré-processamento de imagens para melhorar qualidade do OCR
+Image preprocessing to improve OCR quality
 """
 import cv2
 import numpy as np
@@ -10,37 +10,37 @@ import config
 
 def preprocess_image(image: Image.Image, dpi: int = None) -> np.ndarray:
     """
-    Pipeline completo de pré-processamento
+    Complete preprocessing pipeline.
 
     Args:
-        image: imagem PIL
-        dpi: DPI da imagem (se None, usa config)
+        image: PIL image
+        dpi: image DPI (if None, uses config)
 
     Returns:
-        imagem processada como array numpy
+        processed image as numpy array
     """
     if dpi is None:
         dpi = config.IMAGE_DPI
 
-    # Converte para numpy array
+    # Convert to numpy array
     img_array = np.array(image)
 
-    # Converte para escala de cinza se necessário
+    # Convert to grayscale if needed
     if len(img_array.shape) == 3:
         img_gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     else:
         img_gray = img_array
 
-    # 1. Deskew (correção de rotação)
+    # 1. Deskew (rotation correction)
     img_deskewed = deskew_image(img_gray)
 
-    # 2. Melhora contraste
+    # 2. Enhance contrast
     img_enhanced = enhance_contrast(img_deskewed)
 
-    # 3. Remove ruído
+    # 3. Remove noise
     img_denoised = remove_noise(img_enhanced)
 
-    # 4. Binarização
+    # 4. Binarization
     img_binary = binarize_image(img_denoised, method=config.BINARIZATION_METHOD)
 
     return img_binary
@@ -48,23 +48,23 @@ def preprocess_image(image: Image.Image, dpi: int = None) -> np.ndarray:
 
 def deskew_image(image: np.ndarray, max_angle: float = 10.0) -> np.ndarray:
     """
-    Corrige rotação da imagem (deskew)
+    Correct image rotation (deskew).
 
     Args:
-        image: imagem em escala de cinza
-        max_angle: ângulo máximo de correção (graus)
+        image: grayscale image
+        max_angle: maximum correction angle (degrees)
 
     Returns:
-        imagem corrigida
+        corrected image
     """
-    # Detecta ângulo de rotação usando transformada de Hough
+    # Detect rotation angle using Hough transform
     edges = cv2.Canny(image, 50, 150, apertureSize=3)
     lines = cv2.HoughLines(edges, 1, np.pi / 180, 100)
 
     if lines is None:
         return image
 
-    # Calcula ângulo médio das linhas detectadas
+    # Calculate average angle of detected lines
     angles = []
     for rho, theta in lines[:, 0]:
         angle = np.degrees(theta) - 90
@@ -74,14 +74,14 @@ def deskew_image(image: np.ndarray, max_angle: float = 10.0) -> np.ndarray:
     if not angles:
         return image
 
-    # Usa mediana dos ângulos para evitar outliers
+    # Use median of angles to avoid outliers
     rotation_angle = np.median(angles)
 
-    # Aplica rotação apenas se significativa
+    # Apply rotation only if significant
     if abs(rotation_angle) < config.DESKEW_ANGLE_THRESHOLD:
         return image
 
-    # Rotaciona imagem
+    # Rotate image
     (h, w) = image.shape[:2]
     center = (w // 2, h // 2)
     M = cv2.getRotationMatrix2D(center, rotation_angle, 1.0)
@@ -93,48 +93,48 @@ def deskew_image(image: np.ndarray, max_angle: float = 10.0) -> np.ndarray:
 
 def binarize_image(image: np.ndarray, method: str = 'adaptive') -> np.ndarray:
     """
-    Binariza imagem (preto e branco)
+    Binarize image (black and white).
 
     Args:
-        image: imagem em escala de cinza
-        method: 'otsu' ou 'adaptive'
+        image: grayscale image
+        method: 'otsu' or 'adaptive'
 
     Returns:
-        imagem binarizada
+        binarized image
     """
     if method == 'otsu':
-        # Método de Otsu: automático
+        # Otsu's method: automatic
         _, binary = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     elif method == 'adaptive':
-        # Binarização adaptativa: melhor para iluminação irregular
+        # Adaptive binarization: better for uneven lighting
         binary = cv2.adaptiveThreshold(
             image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY, 11, 2
         )
     else:
-        raise ValueError(f"Método desconhecido: {method}")
+        raise ValueError(f"Unknown method: {method}")
 
     return binary
 
 
 def remove_noise(image: np.ndarray, kernel_size: int = None) -> np.ndarray:
     """
-    Remove ruído da imagem
+    Remove noise from the image.
 
     Args:
-        image: imagem em escala de cinza
-        kernel_size: tamanho do kernel para morfologia
+        image: grayscale image
+        kernel_size: kernel size for morphology
 
     Returns:
-        imagem sem ruído
+        denoised image
     """
     if kernel_size is None:
         kernel_size = config.DENOISE_KERNEL_SIZE
 
-    # Filtro mediano para remover sal e pimenta
+    # Median filter to remove salt and pepper noise
     denoised = cv2.medianBlur(image, 3)
 
-    # Operação morfológica de abertura (erosão + dilatação)
+    # Morphological opening operation (erosion + dilation)
     kernel = np.ones((kernel_size, kernel_size), np.uint8)
     opened = cv2.morphologyEx(denoised, cv2.MORPH_OPEN, kernel)
 
@@ -143,13 +143,13 @@ def remove_noise(image: np.ndarray, kernel_size: int = None) -> np.ndarray:
 
 def enhance_contrast(image: np.ndarray) -> np.ndarray:
     """
-    Melhora contraste da imagem usando CLAHE
+    Enhance image contrast using CLAHE.
 
     Args:
-        image: imagem em escala de cinza
+        image: grayscale image
 
     Returns:
-        imagem com contraste melhorado
+        contrast-enhanced image
     """
     # CLAHE (Contrast Limited Adaptive Histogram Equalization)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -160,14 +160,14 @@ def enhance_contrast(image: np.ndarray) -> np.ndarray:
 
 def remove_borders(image: np.ndarray, border_size: int = 10) -> np.ndarray:
     """
-    Remove bordas da imagem (útil para scans com bordas pretas)
+    Remove image borders (useful for scans with black borders).
 
     Args:
-        image: imagem
-        border_size: pixels a remover de cada lado
+        image: image
+        border_size: pixels to remove from each side
 
     Returns:
-        imagem sem bordas
+        image without borders
     """
     h, w = image.shape[:2]
     return image[border_size:h-border_size, border_size:w-border_size]
@@ -175,26 +175,26 @@ def remove_borders(image: np.ndarray, border_size: int = 10) -> np.ndarray:
 
 def resize_to_dpi(image: Image.Image, target_dpi: int = 300) -> Image.Image:
     """
-    Redimensiona imagem para DPI desejado
+    Resize image to desired DPI.
 
     Args:
-        image: imagem PIL
-        target_dpi: DPI alvo
+        image: PIL image
+        target_dpi: target DPI
 
     Returns:
-        imagem redimensionada
+        resized image
     """
-    # Obtém DPI atual (se disponível)
+    # Get current DPI (if available)
     current_dpi = image.info.get('dpi', (72, 72))[0]
 
     if current_dpi == target_dpi:
         return image
 
-    # Calcula novo tamanho
+    # Calculate new size
     scale = target_dpi / current_dpi
     new_size = (int(image.width * scale), int(image.height * scale))
 
-    # Redimensiona com alta qualidade
+    # Resize with high quality
     resized = image.resize(new_size, Image.Resampling.LANCZOS)
 
     return resized

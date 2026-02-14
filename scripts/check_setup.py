@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 """
-Script para verificar a configuração do ambiente
+Script to verify environment setup.
 """
 import logging
 import sys
 from pathlib import Path
 
-# Adiciona diretório raiz ao path
+# Add root directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 logger = logging.getLogger(__name__)
 
 
 def check_setup():
-    """Verifica configuração do ambiente."""
+    """Verify environment configuration."""
     import config
 
     config.setup_logging()
 
     logger.info("=" * 60)
-    logger.info("VERIFICAÇÃO DO AMBIENTE - Document Parser Pipeline")
+    logger.info("ENVIRONMENT CHECK - Document Parser Pipeline")
     logger.info("=" * 60)
 
     # Python
@@ -31,74 +31,74 @@ def check_setup():
 
         logger.info("PyTorch: %s", torch.__version__)
         gpu_available = torch.cuda.is_available()
-        logger.info("GPU (CUDA) disponível: %s", "Sim" if gpu_available else "Não")
+        logger.info("GPU (CUDA) available: %s", "Yes" if gpu_available else "No")
         if gpu_available:
             logger.info("Device: %s", torch.cuda.get_device_name(0))
             logger.info("CUDA Version: %s", torch.version.cuda)
     except ImportError:
-        logger.error("PyTorch não instalado")
+        logger.error("PyTorch not installed")
         return False
 
-    # Dependências principais
+    # Main dependencies
     deps = {
-        "pdfplumber": "Extração de PDFs digitais",
-        "pdf2image": "Conversão PDF para imagem",
-        "cv2": "Processamento de imagem (OpenCV)",
-        "PIL": "Pillow (imagens)",
-        "doctr": "OCR e layout detection",
-        "camelot": "Extração de tabelas",
-        "pydantic": "Validação de schemas",
+        "pdfplumber": "Digital PDF extraction",
+        "pdf2image": "PDF to image conversion",
+        "cv2": "Image processing (OpenCV)",
+        "PIL": "Pillow (images)",
+        "doctr": "OCR and layout detection",
+        "camelot": "Table extraction",
+        "pydantic": "Schema validation",
     }
 
-    logger.info("Dependências:")
+    logger.info("Dependencies:")
     all_ok = True
     for module, desc in deps.items():
         try:
             __import__(module)
             logger.info("  OK  %-15s - %s", module, desc)
         except ImportError:
-            logger.error("  FALTA %-15s - %s (NÃO INSTALADO)", module, desc)
+            logger.error("  MISSING %-15s - %s (NOT INSTALLED)", module, desc)
             all_ok = False
 
-    # Estrutura de diretórios
-    logger.info("Estrutura de diretórios:")
+    # Directory structure
+    logger.info("Directory structure:")
     dirs = ["src", "scripts", "resource", "output", ".cache"]
     for d in dirs:
         path = Path(d)
         if path.exists():
             logger.info("  OK  %s/", d)
         else:
-            logger.warning("  %s/ (não existe)", d)
+            logger.warning("  %s/ (does not exist)", d)
 
     # Config
-    logger.info("Configuração:")
+    logger.info("Configuration:")
     try:
         logger.info("  Device: %s", config.DEVICE)
         logger.info("  OCR Batch Size: %s", config.OCR_BATCH_SIZE)
         logger.info("  Image DPI: %s", config.IMAGE_DPI)
         logger.info("  Min Confidence: %s", config.MIN_CONFIDENCE)
     except Exception as e:
-        logger.error("Erro ao carregar config: %s", e)
+        logger.error("Error loading config: %s", e)
 
-    # Teste de import do pipeline
+    # Pipeline import test
     logger.info("Pipeline:")
     try:
         from src.pipeline import DocumentProcessor
 
-        logger.info("  DocumentProcessor importado com sucesso")
+        logger.info("  DocumentProcessor imported successfully")
     except Exception as e:
-        logger.error("Erro ao importar pipeline: %s", e)
+        logger.error("Error importing pipeline: %s", e)
         all_ok = False
 
-    # Resumo
+    # Summary
     logger.info("=" * 60)
     if all_ok:
-        logger.info("AMBIENTE CONFIGURADO CORRETAMENTE!")
-        logger.info("Próximo passo:")
-        logger.info("  python scripts/process_single.py resource/seu_documento.pdf")
+        logger.info("ENVIRONMENT CONFIGURED CORRECTLY!")
+        logger.info("Next step:")
+        logger.info("  python scripts/process_single.py resource/your_document.pdf")
     else:
-        logger.warning("ALGUNS PROBLEMAS DETECTADOS")
-        logger.info("Instale as dependências faltantes:")
+        logger.warning("SOME ISSUES DETECTED")
+        logger.info("Install missing dependencies:")
         logger.info("  pip install -r requirements.txt")
     logger.info("=" * 60)
 

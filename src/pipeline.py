@@ -1,14 +1,14 @@
 """
-Pipeline principal para processamento de PDFs
+Main pipeline for PDF processing.
 
-Suporta múltiplos engines de OCR:
-- doctr: Deep learning (PyTorch), rápido com GPU
-- tesseract: LSTM tradicional, bom para português
+Supports multiple OCR engines:
+- doctr: Deep learning (PyTorch), fast with GPU
+- tesseract: Traditional LSTM, good for Portuguese
 
-Suporta processamento paralelo:
-- Páginas digitais: ProcessPoolExecutor (CPU-bound)
-- Páginas OCR com docTR: Batch processing (GPU)
-- Páginas OCR com Tesseract: ProcessPoolExecutor (CPU)
+Supports parallel processing:
+- Digital pages: ProcessPoolExecutor (CPU-bound)
+- OCR pages with docTR: Batch processing (GPU)
+- OCR pages with Tesseract: ProcessPoolExecutor (CPU)
 """
 import logging
 import multiprocessing
@@ -30,7 +30,7 @@ from src.utils.ocr_postprocess import postprocess_ocr_text
 
 logger = logging.getLogger(__name__)
 
-# Importação condicional do Tesseract
+# Conditional Tesseract import
 try:
     from src.extractors.ocr_tesseract import TesseractEngine, extract_ocr_page_tesseract
     TESSERACT_AVAILABLE = True
@@ -41,25 +41,25 @@ except ImportError:
 
 
 # =============================================================================
-# Funções auxiliares para processamento paralelo (devem ser top-level para pickle)
+# Helper functions for parallel processing (must be top-level for pickle)
 # =============================================================================
 
 def _process_digital_page_worker(args: Tuple[str, int, bool]) -> Tuple[int, Page]:
     """
-    Worker para processar uma página digital em paralelo.
+    Worker to process a digital page in parallel.
 
     Args:
-        args: tupla (pdf_path, page_number, extract_tables)
+        args: tuple (pdf_path, page_number, extract_tables)
 
     Returns:
-        tupla (page_number, Page)
+        tuple (page_number, Page)
     """
     pdf_path, page_number, extract_tables = args
 
     try:
         blocks, width, height = extract_digital_page(pdf_path, page_number)
 
-        # Extrai tabelas se solicitado
+        # Extract tables if requested
         if extract_tables:
             try:
                 table_blocks = extract_tables_digital(pdf_path, page_number)
@@ -81,7 +81,7 @@ def _process_digital_page_worker(args: Tuple[str, int, bool]) -> Tuple[int, Page
                     blocks = filtered_blocks + table_blocks
                     blocks = sort_blocks_by_position(blocks)
             except Exception:
-                pass  # Ignora erros de tabela silenciosamente
+                pass  # Silently ignore table errors
 
         page = Page(
             page=page_number,
@@ -98,13 +98,13 @@ def _process_digital_page_worker(args: Tuple[str, int, bool]) -> Tuple[int, Page
 
 def _process_tesseract_page_worker(args: Tuple[str, int, str, str]) -> Tuple[int, Page]:
     """
-    Worker para processar uma página com Tesseract em paralelo.
+    Worker to process a page with Tesseract in parallel.
 
     Args:
-        args: tupla (pdf_path, page_number, lang, tesseract_config)
+        args: tuple (pdf_path, page_number, lang, tesseract_config)
 
     Returns:
-        tupla (page_number, Page)
+        tuple (page_number, Page)
     """
     pdf_path, page_number, lang, tesseract_config = args
 
@@ -133,7 +133,7 @@ def _process_tesseract_page_worker(args: Tuple[str, int, str, str]) -> Tuple[int
 
 
 def _postprocess_blocks(blocks: list) -> list:
-    """Aplica pós-processamento em blocos OCR (versão standalone para workers)."""
+    """Apply post-processing to OCR blocks (standalone version for workers)."""
     fix_errors = getattr(config, "OCR_FIX_ERRORS", True)
     min_line = getattr(config, "OCR_MIN_LINE_LENGTH", 3)
 
@@ -167,13 +167,13 @@ def _postprocess_blocks(blocks: list) -> list:
 
 def _classify_page_worker(args: Tuple[str, int]) -> Tuple[int, str]:
     """
-    Worker para classificar o tipo de uma página em paralelo.
+    Worker to classify a page type in parallel.
 
     Args:
-        args: tupla (pdf_path, page_number)
+        args: tuple (pdf_path, page_number)
 
     Returns:
-        tupla (page_number, page_type)
+        tuple (page_number, page_type)
     """
     pdf_path, page_number = args
 
@@ -186,9 +186,9 @@ def _classify_page_worker(args: Tuple[str, int]) -> Tuple[int, str]:
 
 class DocumentProcessor:
     """
-    Orquestrador principal do pipeline de extração.
+    Main extraction pipeline orchestrator.
 
-    Suporta múltiplos engines de OCR configuráveis via config.OCR_ENGINE.
+    Supports multiple OCR engines configurable via config.OCR_ENGINE.
     """
 
     def __init__(self, use_gpu: bool = None, ocr_engine: str = None):
@@ -203,31 +203,31 @@ class DocumentProcessor:
                 try:
                     self.tesseract_engine = TesseractEngine()
                     logger.info(
-                        "Tesseract Engine inicializado: lang=%s",
+                        "Tesseract Engine initialized: lang=%s",
                         self.tesseract_engine.lang,
                     )
                 except Exception as e:
-                    logger.warning("Erro ao inicializar Tesseract, usando docTR: %s", e)
+                    logger.warning("Error initializing Tesseract, falling back to docTR: %s", e)
                     self._init_doctr_engine()
             else:
-                logger.warning("Tesseract não disponível, usando docTR")
+                logger.warning("Tesseract not available, falling back to docTR")
                 self._init_doctr_engine()
         else:
             self._init_doctr_engine()
 
     def _init_doctr_engine(self):
-        """Inicializa engine docTR."""
+        """Initialize docTR engine."""
         try:
             device = "cuda" if self.use_gpu else "cpu"
             self.ocr_engine = DocTREngine(device=device)
             self.ocr_engine_type = "doctr"
         except Exception as e:
-            logger.error("Erro ao inicializar docTR com GPU: %s", e)
+            logger.error("Error initializing docTR with GPU: %s", e)
             if self.use_gpu:
                 try:
                     self.ocr_engine = DocTREngine(device="cpu")
                 except Exception as e2:
-                    logger.critical("Erro crítico ao inicializar OCR: %s", e2)
+                    logger.critical("Critical error initializing OCR: %s", e2)
 
     def process_document(
         self,
@@ -237,21 +237,21 @@ class DocumentProcessor:
         show_progress: bool = True,
     ) -> Document:
         """
-        Processa um documento PDF completo.
+        Process a complete PDF document.
 
         Args:
-            pdf_path: caminho para o arquivo PDF
-            doc_id: ID do documento (se None, usa nome do arquivo)
-            extract_tables: tentar extrair tabelas
-            show_progress: (ignorado, mantido para compat — usa logging)
+            pdf_path: path to the PDF file
+            doc_id: document ID (if None, uses filename)
+            extract_tables: attempt to extract tables
+            show_progress: (ignored, kept for compat — uses logging)
 
         Returns:
-            Document com todas as páginas processadas
+            Document with all processed pages
         """
         pdf_path = Path(pdf_path)
 
         if not pdf_path.exists():
-            raise FileNotFoundError(f"Arquivo não encontrado: {pdf_path}")
+            raise FileNotFoundError(f"File not found: {pdf_path}")
 
         if doc_id is None:
             doc_id = pdf_path.stem
@@ -259,7 +259,7 @@ class DocumentProcessor:
         with pdfplumber.open(pdf_path) as pdf:
             total_pages = len(pdf.pages)
 
-        logger.info("Processando: %s (%d páginas, tabelas=%s)",
+        logger.info("Processing: %s (%d pages, tables=%s)",
                      pdf_path.name, total_pages, extract_tables)
 
         document = Document(
@@ -275,9 +275,9 @@ class DocumentProcessor:
                     str(pdf_path), page_num, extract_tables=extract_tables
                 )
                 document.pages.append(page)
-                logger.debug("Página %d/%d processada", page_num, total_pages)
+                logger.debug("Page %d/%d processed", page_num, total_pages)
             except Exception as e:
-                logger.error("Erro ao processar página %d: %s", page_num, e)
+                logger.error("Error processing page %d: %s", page_num, e)
                 page = Page(page=page_num, source="digital", blocks=[])
                 document.pages.append(page)
 
@@ -286,7 +286,7 @@ class DocumentProcessor:
             len([b for b in p.blocks if b.type == "table"]) for p in document.pages
         )
         logger.info(
-            "Processamento concluído: %d blocos, %d tabelas",
+            "Processing completed: %d blocks, %d tables",
             total_blocks,
             total_tables,
         )
@@ -296,9 +296,9 @@ class DocumentProcessor:
     def process_page(
         self, pdf_path: str, page_number: int, extract_tables: bool = True
     ) -> Page:
-        """Processa uma única página."""
+        """Process a single page."""
         page_type = detect_page_type(pdf_path, page_number)
-        logger.debug("Página %d: tipo=%s", page_number, page_type)
+        logger.debug("Page %d: type=%s", page_number, page_type)
 
         if page_type == "digital":
             blocks, width, height = extract_digital_page(pdf_path, page_number)
@@ -317,7 +317,7 @@ class DocumentProcessor:
                         blocks = sort_blocks_by_position(blocks)
                 except Exception as e:
                     logger.warning(
-                        "Erro ao extrair tabelas da página %d: %s", page_number, e
+                        "Error extracting tables from page %d: %s", page_number, e
                     )
 
         else:
@@ -336,7 +336,7 @@ class DocumentProcessor:
         )
 
     def _extract_with_ocr(self, pdf_path: str, page_number: int):
-        """Extrai conteúdo usando o engine OCR configurado."""
+        """Extract content using the configured OCR engine."""
         if self.ocr_engine_type == "tesseract" and self.tesseract_engine is not None:
             return extract_ocr_page_tesseract(
                 pdf_path, page_number, ocr_engine=self.tesseract_engine
@@ -346,7 +346,7 @@ class DocumentProcessor:
         )
 
     def _postprocess_ocr_blocks(self, blocks: list) -> list:
-        """Aplica pós-processamento em blocos extraídos por OCR."""
+        """Apply post-processing to OCR-extracted blocks."""
         fix_errors = getattr(config, "OCR_FIX_ERRORS", True)
         min_line = getattr(config, "OCR_MIN_LINE_LENGTH", 3)
 
@@ -382,7 +382,7 @@ class DocumentProcessor:
         table_blocks: list[Block],
         overlap_threshold: float = 0.5,
     ) -> list[Block]:
-        """Remove blocos de texto que se sobrepõem significativamente com tabelas."""
+        """Remove text blocks that significantly overlap with tables."""
         from src.utils.bbox import bbox_area, bbox_overlap
 
         filtered_blocks = []
@@ -406,7 +406,7 @@ class DocumentProcessor:
         indent: int = 2,
         ensure_ascii: bool = False,
     ) -> None:
-        """Salva documento em arquivo JSON."""
+        """Save document to JSON file."""
         import json
 
         output_path = Path(output_path)
@@ -418,7 +418,7 @@ class DocumentProcessor:
             json.dump(data, f, indent=indent, ensure_ascii=ensure_ascii)
 
         logger.info(
-            "JSON salvo em: %s (%.1f KB)",
+            "JSON saved to: %s (%.1f KB)",
             output_path,
             output_path.stat().st_size / 1024,
         )
@@ -426,26 +426,26 @@ class DocumentProcessor:
     def save_to_searchable_pdf(
         self, document: Document, pdf_path: str, output_path: str
     ) -> None:
-        """Salva PDF pesquisável com texto invisível sobreposto nas páginas OCR."""
+        """Save searchable PDF with invisible text overlaid on OCR pages."""
         from src.exporters.searchable_pdf import create_searchable_pdf
 
         create_searchable_pdf(pdf_path, document, output_path)
 
         output_path_obj = Path(output_path)
         logger.info(
-            "PDF pesquisável salvo em: %s (%.1f KB)",
+            "Searchable PDF saved to: %s (%.1f KB)",
             output_path,
             output_path_obj.stat().st_size / 1024,
         )
 
     # =========================================================================
-    # Métodos para processamento paralelo
+    # Parallel processing methods
     # =========================================================================
 
     def _classify_all_pages(
         self, pdf_path: str, total_pages: int, show_progress: bool = True
     ) -> Dict[int, str]:
-        """Classifica todas as páginas do documento antes do processamento."""
+        """Classify all document pages before processing."""
         page_types = {}
         min_pages_parallel = 10
 
@@ -479,13 +479,13 @@ class DocumentProcessor:
                         page_num = futures[future]
                         page_types[page_num] = "scan"
 
-        logger.info("Classificação concluída: %d páginas", total_pages)
+        logger.info("Classification completed: %d pages", total_pages)
         return page_types
 
     def _process_ocr_batch_doctr(
         self, pdf_path: str, page_numbers: List[int], show_progress: bool = True
     ) -> Dict[int, Page]:
-        """Processa múltiplas páginas OCR em batch usando docTR."""
+        """Process multiple OCR pages in batch using docTR."""
         from pdf2image import convert_from_path
         import numpy as np
 
@@ -503,7 +503,7 @@ class DocumentProcessor:
 
         for batch_idx, batch_pages in enumerate(batches, 1):
             logger.info(
-                "OCR batch %d/%d (%d páginas)", batch_idx, len(batches), len(batch_pages)
+                "OCR batch %d/%d (%d pages)", batch_idx, len(batches), len(batch_pages)
             )
             try:
                 images = [None] * len(batch_pages)
@@ -599,7 +599,7 @@ class DocumentProcessor:
                         )
 
             except Exception as e:
-                logger.error("Erro no batch OCR %d: %s", batch_idx, e)
+                logger.error("Error in OCR batch %d: %s", batch_idx, e)
                 for page_num in batch_pages:
                     if page_num not in results:
                         results[page_num] = Page(
@@ -611,7 +611,7 @@ class DocumentProcessor:
     def _parse_doctr_page_result(
         self, page_result, page_number: int, page_width: float, page_height: float
     ) -> List[Block]:
-        """Parseia resultado de uma página do docTR."""
+        """Parse a docTR page result."""
         from src.utils.text_normalizer import normalize_text
 
         blocks = []
@@ -699,18 +699,18 @@ class DocumentProcessor:
         show_progress: bool = True,
     ) -> Document:
         """
-        Processa um documento PDF com paralelização.
+        Process a PDF document with parallelization.
 
-        Estratégia:
-        1. Classifica todas as páginas (digital vs OCR)
-        2. Processa páginas digitais em paralelo (ProcessPoolExecutor)
-        3. Processa páginas OCR em batch (docTR) ou paralelo (Tesseract)
-        4. Merge ordenado dos resultados
+        Strategy:
+        1. Classify all pages (digital vs OCR)
+        2. Process digital pages in parallel (ProcessPoolExecutor)
+        3. Process OCR pages in batch (docTR) or parallel (Tesseract)
+        4. Ordered merge of results
         """
         pdf_path = Path(pdf_path)
 
         if not pdf_path.exists():
-            raise FileNotFoundError(f"Arquivo não encontrado: {pdf_path}")
+            raise FileNotFoundError(f"File not found: {pdf_path}")
 
         if doc_id is None:
             doc_id = pdf_path.stem
@@ -722,14 +722,14 @@ class DocumentProcessor:
         min_pages = getattr(config, "PARALLEL_MIN_PAGES", 4)
 
         if not parallel_enabled or total_pages < min_pages:
-            logger.info("Processamento sequencial (%d páginas)", total_pages)
+            logger.info("Sequential processing (%d pages)", total_pages)
             return self.process_document(
                 pdf_path, doc_id, extract_tables, show_progress
             )
 
-        logger.info("Processando (paralelo): %s (%d páginas)", pdf_path.name, total_pages)
+        logger.info("Processing (parallel): %s (%d pages)", pdf_path.name, total_pages)
 
-        # Fase 1: Classificar todas as páginas
+        # Phase 1: Classify all pages
         page_types = self._classify_all_pages(
             str(pdf_path), total_pages, show_progress
         )
@@ -738,14 +738,14 @@ class DocumentProcessor:
         ocr_pages = [p for p, t in page_types.items() if t in ("scan", "hybrid")]
 
         logger.info(
-            "Páginas digitais: %d, páginas OCR: %d",
+            "Digital pages: %d, OCR pages: %d",
             len(digital_pages),
             len(ocr_pages),
         )
 
         results: Dict[int, Page] = {}
 
-        # Fase 2a: Processa páginas digitais em paralelo
+        # Phase 2a: Process digital pages in parallel
         if digital_pages:
             num_workers = getattr(config, "PARALLEL_WORKERS", None)
             if num_workers is None:
@@ -754,7 +754,7 @@ class DocumentProcessor:
                 )
 
             logger.info(
-                "Processando %d páginas digitais (%d workers)...",
+                "Processing %d digital pages (%d workers)...",
                 len(digital_pages),
                 num_workers,
             )
@@ -776,12 +776,12 @@ class DocumentProcessor:
                         results[page_num] = page
                     except Exception as e:
                         page_num = futures[future]
-                        logger.error("Erro página digital %d: %s", page_num, e)
+                        logger.error("Error on digital page %d: %s", page_num, e)
                         results[page_num] = Page(
                             page=page_num, source="digital", blocks=[]
                         )
 
-        # Fase 2b: Processa páginas OCR
+        # Phase 2b: Process OCR pages
         if ocr_pages:
             if self.ocr_engine_type == "tesseract" and TESSERACT_AVAILABLE:
                 num_workers = getattr(config, "PARALLEL_WORKERS", None)
@@ -791,7 +791,7 @@ class DocumentProcessor:
                     )
 
                 logger.info(
-                    "Processando %d páginas OCR Tesseract (%d workers)...",
+                    "Processing %d OCR Tesseract pages (%d workers)...",
                     len(ocr_pages),
                     num_workers,
                 )
@@ -818,20 +818,20 @@ class DocumentProcessor:
                             results[page_num] = page
                         except Exception as e:
                             page_num = futures[future]
-                            logger.error("Erro OCR página %d: %s", page_num, e)
+                            logger.error("OCR error on page %d: %s", page_num, e)
                             results[page_num] = Page(
                                 page=page_num, source="ocr", blocks=[]
                             )
             else:
                 logger.info(
-                    "Processando %d páginas OCR docTR (batch)...", len(ocr_pages)
+                    "Processing %d OCR docTR pages (batch)...", len(ocr_pages)
                 )
                 ocr_results = self._process_ocr_batch_doctr(
                     str(pdf_path), ocr_pages, show_progress
                 )
                 results.update(ocr_results)
 
-        # Fase 3: Monta documento ordenado
+        # Phase 3: Build ordered document
         document = Document(
             doc_id=doc_id,
             source_file=pdf_path.name,
@@ -852,7 +852,7 @@ class DocumentProcessor:
             len([b for b in p.blocks if b.type == "table"]) for p in document.pages
         )
         logger.info(
-            "Processamento paralelo concluído: %d blocos, %d tabelas",
+            "Parallel processing completed: %d blocks, %d tables",
             total_blocks,
             total_tables,
         )
@@ -868,7 +868,7 @@ def process_pdf(
     parallel: bool = None,
     save_pdf: bool = None,
 ) -> Document:
-    """Função auxiliar para processar um PDF e salvar o resultado."""
+    """Helper function to process a PDF and save the result."""
     import gc
 
     processor = DocumentProcessor(use_gpu=use_gpu)

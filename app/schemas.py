@@ -1,8 +1,8 @@
 """
-Schemas Pydantic para request/response da API.
+Pydantic schemas for API request/response.
 
-Separados dos schemas do pipeline (src/models/schemas.py) para manter
-a camada HTTP desacoplada da lógica de negócio.
+Separated from pipeline schemas (src/models/schemas.py) to keep
+the HTTP layer decoupled from business logic.
 """
 from dataclasses import dataclass
 from typing import Optional
@@ -18,9 +18,9 @@ from pydantic import BaseModel, Field
 @dataclass
 class ProcessingOptions:
     """
-    Opções de processamento por request.
+    Per-request processing options.
 
-    Valores None significam "usar default do config".
+    None values mean "use config default".
     """
 
     extract_tables: bool = True
@@ -35,16 +35,16 @@ class ProcessingOptions:
 
 
 class HealthResponse(BaseModel):
-    """Resposta do endpoint /health."""
+    """Response for the /health endpoint."""
 
-    status: str = Field(description="Status do serviço")
-    gpu_available: bool = Field(description="GPU disponível para OCR")
-    ocr_engine: str = Field(description="Engine OCR carregado")
-    device: str = Field(description="Device em uso (cpu/cuda)")
+    status: str = Field(description="Service status")
+    gpu_available: bool = Field(description="GPU available for OCR")
+    ocr_engine: str = Field(description="Loaded OCR engine")
+    device: str = Field(description="Device in use (cpu/cuda)")
 
 
 class InfoResponse(BaseModel):
-    """Resposta do endpoint /info com configuração atual."""
+    """Response for the /info endpoint with current configuration."""
 
     ocr_engine: str
     ocr_dpi: int
@@ -63,6 +63,6 @@ class InfoResponse(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """Resposta de erro padronizada."""
+    """Standardized error response."""
 
-    detail: str = Field(description="Mensagem de erro")
+    detail: str = Field(description="Error message")

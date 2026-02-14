@@ -1,11 +1,11 @@
 """
-Módulos de extração de conteúdo
+Content extraction modules
 """
 from .digital import extract_digital_page
 from .ocr import extract_ocr_page, OCREngine, DocTREngine
 from .tables import extract_tables_digital
 
-# Importação condicional do Tesseract (requer instalação separada)
+# Conditional Tesseract import (requires separate installation)
 try:
     from .ocr_tesseract import extract_ocr_page_tesseract, TesseractEngine
     TESSERACT_AVAILABLE = True

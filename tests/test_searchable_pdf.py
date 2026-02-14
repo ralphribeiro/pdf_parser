@@ -1,7 +1,7 @@
 """
-Testes para o exportador de PDF pesquisável (searchable PDF).
+Tests for the searchable PDF exporter.
 
-Segue TDD: cada teste é escrito antes da implementação correspondente.
+Follows TDD: each test is written before the corresponding implementation.
 """
 import io
 import sys
@@ -20,7 +20,7 @@ from src.models.schemas import Page, Block, BlockType
 # =========================================================================
 
 class TestCreateTextOverlay:
-    """Testes para _create_text_overlay: gera PDF de 1 página com texto invisível."""
+    """Tests for _create_text_overlay: generates 1-page PDF with invisible text."""
 
     def _make_ocr_page(self):
         return Page(
@@ -30,14 +30,14 @@ class TestCreateTextOverlay:
                 Block(
                     block_id="p3_b1",
                     type=BlockType.PARAGRAPH,
-                    text="Texto de teste para OCR",
+                    text="OCR test text sample",
                     bbox=[0.1, 0.05, 0.9, 0.15],
                     confidence=0.92,
                 ),
                 Block(
                     block_id="p3_b2",
                     type=BlockType.PARAGRAPH,
-                    text="Segunda linha do documento escaneado",
+                    text="Second line of the scanned document",
                     bbox=[0.1, 0.20, 0.85, 0.30],
                     confidence=0.88,
                 ),
@@ -75,7 +75,7 @@ class TestCreateTextOverlay:
         assert len(reader.pages) == 1
 
     def test_empty_blocks_returns_valid_pdf(self):
-        """Página sem blocos ainda deve gerar PDF válido."""
+        """Page without blocks should still generate valid PDF."""
         from src.exporters.searchable_pdf import _create_text_overlay
 
         page = Page(
@@ -92,7 +92,7 @@ class TestCreateTextOverlay:
 # =========================================================================
 
 class TestCreateSearchablePdf:
-    """Testes para create_searchable_pdf: gera PDF pesquisável multi-página."""
+    """Tests for create_searchable_pdf: generates multi-page searchable PDF."""
 
     def test_output_file_is_created(self, sample_pdf_path, sample_document, output_dir):
         from src.exporters.searchable_pdf import create_searchable_pdf
@@ -123,27 +123,27 @@ class TestCreateSearchablePdf:
         assert len(reader.pages) == 3
 
     def test_digital_pages_preserved(self, sample_pdf_path, sample_document, output_dir):
-        """Páginas digitais devem manter o conteúdo original intacto."""
+        """Digital pages should keep the original content intact."""
         from src.exporters.searchable_pdf import create_searchable_pdf
 
         output_path = output_dir / "searchable.pdf"
         create_searchable_pdf(str(sample_pdf_path), sample_document, str(output_path))
 
         reader = pypdf.PdfReader(str(output_path))
-        # Página 1 é digital - deve ter texto extraível do original
+        # Page 1 is digital - should have extractable text from the original
         text_p1 = reader.pages[0].extract_text()
-        assert "digital original" in text_p1.lower() or len(text_p1) > 0
+        assert "digital" in text_p1.lower() or len(text_p1) > 0
 
 
 # =========================================================================
-# Cycle 3: texto extraível (searchable)
+# Cycle 3: extractable (searchable) text
 # =========================================================================
 
 class TestSearchableTextExtraction:
-    """Testes que verificam que o texto invisível é extraível/pesquisável."""
+    """Tests that verify the invisible text is extractable/searchable."""
 
     def test_ocr_text_extractable_with_pdfplumber(self, sample_pdf_path, sample_document, output_dir):
-        """O texto OCR invisível deve ser extraível via pdfplumber."""
+        """The invisible OCR text should be extractable via pdfplumber."""
         import pdfplumber
         from src.exporters.searchable_pdf import create_searchable_pdf
 
@@ -151,13 +151,13 @@ class TestSearchableTextExtraction:
         create_searchable_pdf(str(sample_pdf_path), sample_document, str(output_path))
 
         with pdfplumber.open(str(output_path)) as pdf:
-            # Página 3 (index 2) é OCR com texto conhecido
+            # Page 3 (index 2) is OCR with known text
             text_p3 = pdf.pages[2].extract_text() or ""
 
-        assert "Texto de teste para OCR" in text_p3
+        assert "OCR test text sample" in text_p3
 
     def test_ocr_text_extractable_with_pypdf(self, sample_pdf_path, sample_document, output_dir):
-        """O texto OCR invisível deve ser extraível via pypdf."""
+        """The invisible OCR text should be extractable via pypdf."""
         from src.exporters.searchable_pdf import create_searchable_pdf
 
         output_path = output_dir / "searchable.pdf"
@@ -166,10 +166,10 @@ class TestSearchableTextExtraction:
         reader = pypdf.PdfReader(str(output_path))
         text_p3 = reader.pages[2].extract_text()
 
-        assert "Texto de teste para OCR" in text_p3
+        assert "OCR test text sample" in text_p3
 
     def test_multiple_blocks_extractable(self, sample_pdf_path, sample_document, output_dir):
-        """Todos os blocos OCR devem ser extraíveis."""
+        """All OCR blocks should be extractable."""
         import pdfplumber
         from src.exporters.searchable_pdf import create_searchable_pdf
 
@@ -179,11 +179,11 @@ class TestSearchableTextExtraction:
         with pdfplumber.open(str(output_path)) as pdf:
             text_p3 = pdf.pages[2].extract_text() or ""
 
-        assert "Texto de teste para OCR" in text_p3
-        assert "Segunda linha do documento escaneado" in text_p3
+        assert "OCR test text sample" in text_p3
+        assert "Second line of the scanned document" in text_p3
 
     def test_digital_page_text_unchanged(self, sample_pdf_path, sample_document, output_dir):
-        """Texto de páginas digitais não deve ser afetado."""
+        """Text of digital pages should not be affected."""
         import pdfplumber
         from src.exporters.searchable_pdf import create_searchable_pdf
 
@@ -193,8 +193,8 @@ class TestSearchableTextExtraction:
         with pdfplumber.open(str(output_path)) as pdf:
             text_p1 = pdf.pages[0].extract_text() or ""
 
-        # Texto original da página 1 do PDF gerado pela fixture
-        assert "digital original" in text_p1.lower()
+        # Original text from page 1 of the PDF generated by the fixture
+        assert "digital" in text_p1.lower()
 
 
 # =========================================================================
@@ -202,14 +202,14 @@ class TestSearchableTextExtraction:
 # =========================================================================
 
 class TestCalculateFontSize:
-    """Testes para _calculate_font_size: texto deve caber na largura do bbox."""
+    """Tests for _calculate_font_size: text should fit within bbox width."""
 
     def test_text_fits_within_bbox_width(self):
         from src.exporters.searchable_pdf import _calculate_font_size
         from reportlab.pdfbase.pdfmetrics import stringWidth
 
-        text = "Texto de teste para OCR"
-        bbox_width = 476.0  # ~80% de 595 pts
+        text = "OCR test text sample"
+        bbox_width = 476.0  # ~80% of 595 pts
 
         font_size = _calculate_font_size(text, bbox_width)
         rendered_width = stringWidth(text, "Helvetica", font_size)
@@ -219,21 +219,21 @@ class TestCalculateFontSize:
     def test_returns_min_size_for_very_long_text(self):
         from src.exporters.searchable_pdf import _calculate_font_size
 
-        # Texto muito longo — deve retornar tamanho mínimo
+        # Very long text — should return minimum size
         text = "A" * 500
         bbox_width = 100.0
 
         font_size = _calculate_font_size(text, bbox_width)
-        assert font_size == 4.0  # min_size padrão
+        assert font_size == 4.0  # default min_size
 
     def test_returns_max_size_for_short_text(self):
         from src.exporters.searchable_pdf import _calculate_font_size
 
         text = "OK"
-        bbox_width = 500.0  # muito espaço
+        bbox_width = 500.0  # plenty of space
 
         font_size = _calculate_font_size(text, bbox_width)
-        assert font_size == 16.0  # max_size padrão
+        assert font_size == 16.0  # default max_size
 
     def test_empty_text_returns_min(self):
         from src.exporters.searchable_pdf import _calculate_font_size
@@ -244,7 +244,7 @@ class TestCalculateFontSize:
     def test_zero_width_returns_min(self):
         from src.exporters.searchable_pdf import _calculate_font_size
 
-        font_size = _calculate_font_size("Texto", 0.0)
+        font_size = _calculate_font_size("Text", 0.0)
         assert font_size == 4.0
 
     def test_custom_min_max(self):
@@ -260,21 +260,21 @@ class TestCalculateFontSize:
 # =========================================================================
 
 class TestPipelineIntegration:
-    """Testes de integração com DocumentProcessor e process_pdf."""
+    """Integration tests with DocumentProcessor and process_pdf."""
 
     def test_save_to_searchable_pdf_method_exists(self):
-        """DocumentProcessor deve ter o método save_to_searchable_pdf."""
+        """DocumentProcessor should have the save_to_searchable_pdf method."""
         from src.pipeline import DocumentProcessor
         assert hasattr(DocumentProcessor, "save_to_searchable_pdf")
 
     def test_save_to_searchable_pdf_creates_file(
         self, sample_pdf_path, sample_document, output_dir
     ):
-        """save_to_searchable_pdf deve criar um PDF válido."""
+        """save_to_searchable_pdf should create a valid PDF."""
         from src.pipeline import DocumentProcessor
 
         processor = DocumentProcessor.__new__(DocumentProcessor)
-        # Inicialização mínima — não precisa de OCR engine para salvar PDF
+        # Minimal initialization — no OCR engine needed to save PDF
         processor.use_gpu = False
         processor.ocr_engine_type = "doctr"
         processor.ocr_engine = None
@@ -288,7 +288,7 @@ class TestPipelineIntegration:
         assert output_path.exists()
         assert output_path.stat().st_size > 0
 
-        # Verifica que é PDF válido com 3 páginas
+        # Verify it's a valid PDF with 3 pages
         reader = pypdf.PdfReader(str(output_path))
         assert len(reader.pages) == 3
 
@@ -296,13 +296,13 @@ class TestPipelineIntegration:
         self, sample_pdf_path, sample_document, output_dir, monkeypatch
     ):
         """
-        process_pdf com save_pdf=True deve criar .json E _searchable.pdf.
+        process_pdf with save_pdf=True should create both .json AND _searchable.pdf.
 
-        Usa monkeypatch para evitar inicializar OCR engines reais.
+        Uses monkeypatch to avoid initializing real OCR engines.
         """
         from src import pipeline
 
-        # Mock do DocumentProcessor para retornar nosso sample_document
+        # Mock DocumentProcessor to return our sample_document
         class FakeProcessor:
             def __init__(self, **kwargs):
                 self.ocr_engine = None
@@ -341,7 +341,7 @@ class TestPipelineIntegration:
     def test_process_pdf_save_pdf_false_no_pdf(
         self, sample_pdf_path, sample_document, output_dir, monkeypatch
     ):
-        """process_pdf com save_pdf=False NÃO deve criar _searchable.pdf."""
+        """process_pdf with save_pdf=False should NOT create _searchable.pdf."""
         from src import pipeline
 
         class FakeProcessor:
@@ -382,10 +382,10 @@ class TestPipelineIntegration:
 # =========================================================================
 
 class TestCLIPdfFlag:
-    """Testes para o flag --pdf / --no-pdf no CLI."""
+    """Tests for the --pdf / --no-pdf CLI flag."""
 
     def _get_parser(self):
-        """Importa e retorna o argparse parser do script."""
+        """Import and return the argparse parser from the script."""
         from scripts.process_single import _build_parser
         return _build_parser()
 
@@ -400,13 +400,13 @@ class TestCLIPdfFlag:
         assert args.pdf is False
 
     def test_default_is_none(self):
-        """Sem flag explícito, deve ser None (usa config)."""
+        """Without explicit flag, should be None (uses config)."""
         parser = self._get_parser()
         args = parser.parse_args(["dummy.pdf"])
         assert args.pdf is None
 
     def test_pdf_and_no_pdf_mutually_exclusive(self):
-        """--pdf e --no-pdf são mutuamente exclusivos."""
+        """--pdf and --no-pdf are mutually exclusive."""
         parser = self._get_parser()
         with pytest.raises(SystemExit):
             parser.parse_args(["dummy.pdf", "--pdf", "--no-pdf"])
@@ -417,7 +417,7 @@ class TestCLIPdfFlag:
 # =========================================================================
 
 class TestConfigSearchablePdf:
-    """Testes para a opção de configuração SEARCHABLE_PDF."""
+    """Tests for the SEARCHABLE_PDF configuration option."""
 
     def test_config_has_searchable_pdf_attribute(self):
         import config
@@ -437,60 +437,60 @@ class TestConfigSearchablePdf:
 # =========================================================================
 
 class TestBlockLinesField:
-    """Testes para o campo lines no schema Block."""
+    """Tests for the lines field in the Block schema."""
 
     def test_block_without_lines_still_valid(self):
-        """Backward compat: Block sem lines deve funcionar."""
+        """Backward compat: Block without lines should work."""
         block = Block(
             block_id="p1_b1",
             type=BlockType.PARAGRAPH,
-            text="Texto qualquer",
+            text="Some text",
             bbox=[0.1, 0.1, 0.9, 0.3],
             confidence=0.95,
         )
         assert block.lines is None
 
     def test_block_with_lines_data(self):
-        """Block com lines deve armazenar dados por linha."""
+        """Block with lines should store per-line data."""
         lines_data = [
-            {"text": "Primeira linha", "bbox": [0.1, 0.1, 0.9, 0.15]},
-            {"text": "Segunda linha", "bbox": [0.1, 0.16, 0.85, 0.21]},
+            {"text": "First line", "bbox": [0.1, 0.1, 0.9, 0.15]},
+            {"text": "Second line", "bbox": [0.1, 0.16, 0.85, 0.21]},
         ]
         block = Block(
             block_id="p1_b1",
             type=BlockType.PARAGRAPH,
-            text="Primeira linha\nSegunda linha",
+            text="First line\nSecond line",
             bbox=[0.1, 0.1, 0.9, 0.21],
             confidence=0.95,
             lines=lines_data,
         )
         assert block.lines is not None
         assert len(block.lines) == 2
-        assert block.lines[0]["text"] == "Primeira linha"
+        assert block.lines[0]["text"] == "First line"
         assert block.lines[1]["bbox"] == [0.1, 0.16, 0.85, 0.21]
 
     def test_block_lines_serializes_to_json(self):
-        """lines deve aparecer no JSON de saída."""
+        """lines should appear in the JSON output."""
         lines_data = [
-            {"text": "Linha 1", "bbox": [0.1, 0.1, 0.9, 0.15]},
+            {"text": "Line 1", "bbox": [0.1, 0.1, 0.9, 0.15]},
         ]
         block = Block(
             block_id="p1_b1",
             type=BlockType.PARAGRAPH,
-            text="Linha 1",
+            text="Line 1",
             bbox=[0.1, 0.1, 0.9, 0.15],
             lines=lines_data,
         )
         d = block.model_dump()
         assert "lines" in d
-        assert d["lines"][0]["text"] == "Linha 1"
+        assert d["lines"][0]["text"] == "Line 1"
 
     def test_block_without_lines_json_has_null(self):
-        """Block sem lines deve serializar lines como null."""
+        """Block without lines should serialize lines as null."""
         block = Block(
             block_id="p1_b1",
             type=BlockType.PARAGRAPH,
-            text="Texto",
+            text="Text",
             bbox=[0.1, 0.1, 0.9, 0.3],
         )
         d = block.model_dump()
@@ -502,26 +502,26 @@ class TestBlockLinesField:
 # =========================================================================
 
 class TestOcrParserLineData:
-    """Testes para verificar que os parsers OCR preservam dados por linha."""
+    """Tests to verify that OCR parsers preserve per-line data."""
 
     def _make_mock_doctr_result(self):
-        """Cria um mock de resultado docTR com 2 linhas em 1 bloco."""
+        """Create a mock docTR result with 2 lines in 1 block."""
         from unittest.mock import MagicMock
 
         word1 = MagicMock()
-        word1.value = "Primeira"
+        word1.value = "First"
         word1.confidence = 0.95
 
         word2 = MagicMock()
-        word2.value = "linha"
+        word2.value = "line"
         word2.confidence = 0.93
 
         word3 = MagicMock()
-        word3.value = "Segunda"
+        word3.value = "Second"
         word3.confidence = 0.90
 
         word4 = MagicMock()
-        word4.value = "linha"
+        word4.value = "line"
         word4.confidence = 0.92
 
         line1 = MagicMock()
@@ -544,7 +544,7 @@ class TestOcrParserLineData:
         return result
 
     def test_parse_doctr_result_includes_lines(self):
-        """_parse_doctr_result deve popular block.lines com dados por linha."""
+        """_parse_doctr_result should populate block.lines with per-line data."""
         from src.extractors.ocr import _parse_doctr_result
 
         result = self._make_mock_doctr_result()
@@ -555,11 +555,11 @@ class TestOcrParserLineData:
         block = blocks[0]
         assert block.lines is not None
         assert len(block.lines) == 2
-        assert block.lines[0]["text"] == "Primeira linha"
-        assert block.lines[1]["text"] == "Segunda linha"
+        assert block.lines[0]["text"] == "First line"
+        assert block.lines[1]["text"] == "Second line"
 
     def test_parse_doctr_result_lines_have_bboxes(self):
-        """Cada linha deve ter seu próprio bbox normalizado."""
+        """Each line should have its own normalized bbox."""
         from src.extractors.ocr import _parse_doctr_result
 
         result = self._make_mock_doctr_result()
@@ -567,13 +567,13 @@ class TestOcrParserLineData:
                                      page_width=2894, page_height=4093)
 
         block = blocks[0]
-        # Linha 1: geometry ((0.1, 0.1), (0.8, 0.15))
+        # Line 1: geometry ((0.1, 0.1), (0.8, 0.15))
         assert block.lines[0]["bbox"] == [0.1, 0.1, 0.8, 0.15]
-        # Linha 2: geometry ((0.1, 0.2), (0.75, 0.25))
+        # Line 2: geometry ((0.1, 0.2), (0.75, 0.25))
         assert block.lines[1]["bbox"] == [0.1, 0.2, 0.75, 0.25]
 
     def test_parse_doctr_page_result_includes_lines(self):
-        """_parse_doctr_page_result (pipeline) deve popular block.lines."""
+        """_parse_doctr_page_result (pipeline) should populate block.lines."""
         from src.pipeline import DocumentProcessor
 
         processor = DocumentProcessor.__new__(DocumentProcessor)
@@ -582,7 +582,7 @@ class TestOcrParserLineData:
         processor.ocr_engine = None
         processor.tesseract_engine = None
 
-        # Pega o page_result (sem wrapper de pages)
+        # Get the page_result (without pages wrapper)
         result = self._make_mock_doctr_result()
         page_result = result.pages[0]
 
@@ -595,7 +595,7 @@ class TestOcrParserLineData:
         block = blocks[0]
         assert block.lines is not None
         assert len(block.lines) == 2
-        assert block.lines[0]["text"] == "Primeira linha"
+        assert block.lines[0]["text"] == "First line"
         assert block.lines[1]["bbox"] == [0.1, 0.2, 0.75, 0.25]
 
 
@@ -604,10 +604,10 @@ class TestOcrParserLineData:
 # =========================================================================
 
 class TestPerLineOverlay:
-    """Testes para rendering per-line usando block.lines."""
+    """Tests for per-line rendering using block.lines."""
 
     def _make_ocr_page_with_lines(self):
-        """Cria página OCR com 1 bloco de 3 linhas, cada uma com bbox próprio."""
+        """Create OCR page with 1 block of 3 lines, each with its own bbox."""
         return Page(
             page=1,
             source="ocr",
@@ -615,13 +615,13 @@ class TestPerLineOverlay:
                 Block(
                     block_id="p1_b1",
                     type=BlockType.PARAGRAPH,
-                    text="Linha um do bloco\nLinha dois do bloco\nLinha tres do bloco",
+                    text="Line one of block\nLine two of block\nLine three of block",
                     bbox=[0.1, 0.1, 0.9, 0.35],
                     confidence=0.95,
                     lines=[
-                        {"text": "Linha um do bloco", "bbox": [0.1, 0.10, 0.9, 0.18]},
-                        {"text": "Linha dois do bloco", "bbox": [0.1, 0.19, 0.85, 0.27]},
-                        {"text": "Linha tres do bloco", "bbox": [0.1, 0.28, 0.80, 0.35]},
+                        {"text": "Line one of block", "bbox": [0.1, 0.10, 0.9, 0.18]},
+                        {"text": "Line two of block", "bbox": [0.1, 0.19, 0.85, 0.27]},
+                        {"text": "Line three of block", "bbox": [0.1, 0.28, 0.80, 0.35]},
                     ],
                 ),
             ],
@@ -638,7 +638,7 @@ class TestPerLineOverlay:
         assert result[:5] == b"%PDF-"
 
     def test_overlay_with_lines_all_text_extractable(self):
-        """Todas as 3 linhas devem ser extraíveis do overlay."""
+        """All 3 lines should be extractable from the overlay."""
         import pdfplumber
         from src.exporters.searchable_pdf import _create_text_overlay
 
@@ -648,12 +648,12 @@ class TestPerLineOverlay:
         with pdfplumber.open(io.BytesIO(result)) as pdf:
             text = pdf.pages[0].extract_text() or ""
 
-        assert "Linha um do bloco" in text
-        assert "Linha dois do bloco" in text
-        assert "Linha tres do bloco" in text
+        assert "Line one of block" in text
+        assert "Line two of block" in text
+        assert "Line three of block" in text
 
     def test_overlay_lines_positioned_top_to_bottom(self):
-        """Linhas devem estar posicionadas de cima para baixo (y decresce no PDF)."""
+        """Lines should be positioned from top to bottom (y decreases in PDF)."""
         from src.exporters.searchable_pdf import _create_text_overlay
         import pdfplumber
 
@@ -664,21 +664,21 @@ class TestPerLineOverlay:
             chars = pdf.pages[0].chars
 
         if chars:
-            # Agrupa chars por proximidade de y (top)
+            # Group chars by proximity of y (top)
             line_ys = {}
             for ch in chars:
-                # Arredonda para agrupar chars da mesma linha
+                # Round to group chars on the same line
                 y_key = round(ch["top"], 0)
                 if y_key not in line_ys:
                     line_ys[y_key] = []
                 line_ys[y_key].append(ch["text"])
 
             y_positions = sorted(line_ys.keys())
-            # Deve haver pelo menos 3 posições Y distintas
+            # There should be at least 3 distinct Y positions
             assert len(y_positions) >= 3, f"Expected >= 3 distinct Y positions, got {len(y_positions)}"
 
     def test_per_line_x_position_matches_line_bbox(self):
-        """Cada linha deve estar posicionada no x1 do SEU próprio bbox, não do bloco."""
+        """Each line should be positioned at its OWN bbox x1, not the block's."""
         import pdfplumber
         from src.exporters.searchable_pdf import _create_text_overlay
 
@@ -687,14 +687,14 @@ class TestPerLineOverlay:
             blocks=[
                 Block(
                     block_id="p1_b1", type=BlockType.PARAGRAPH,
-                    text="Linha esquerda\nLinha indentada",
+                    text="Left line\nIndented line",
                     bbox=[0.05, 0.1, 0.9, 0.25],
                     confidence=0.9,
                     lines=[
-                        # Linha 1 começa em x=0.05
-                        {"text": "Linha esquerda", "bbox": [0.05, 0.10, 0.80, 0.17]},
-                        # Linha 2 começa em x=0.25 (indentada)
-                        {"text": "Linha indentada", "bbox": [0.25, 0.18, 0.90, 0.25]},
+                        # Line 1 starts at x=0.05
+                        {"text": "Left line", "bbox": [0.05, 0.10, 0.80, 0.17]},
+                        # Line 2 starts at x=0.25 (indented)
+                        {"text": "Indented line", "bbox": [0.25, 0.18, 0.90, 0.25]},
                     ],
                 ),
             ],
@@ -706,7 +706,7 @@ class TestPerLineOverlay:
         with pdfplumber.open(io.BytesIO(result)) as pdf:
             chars = pdf.pages[0].chars
 
-        # Agrupa chars por posição Y (top)
+        # Group chars by Y position (top)
         line_groups = {}
         for ch in chars:
             y_key = round(ch["top"], 0)
@@ -717,19 +717,19 @@ class TestPerLineOverlay:
         y_positions = sorted(line_groups.keys())
         assert len(y_positions) >= 2, f"Expected 2 lines, got {len(y_positions)}"
 
-        # Primeiro char da 1a linha deve estar perto de x=0.05*595 ≈ 29.75
+        # First char of 1st line should be near x=0.05*595 ~ 29.75
         first_line_x = line_groups[y_positions[0]][0]["x0"]
-        # Primeiro char da 2a linha deve estar perto de x=0.25*595 ≈ 148.75
+        # First char of 2nd line should be near x=0.25*595 ~ 148.75
         second_line_x = line_groups[y_positions[1]][0]["x0"]
 
-        # A 2a linha deve começar SIGNIFICATIVAMENTE mais à direita
+        # 2nd line should start SIGNIFICANTLY more to the right
         assert second_line_x > first_line_x + 50, (
             f"Second line x ({second_line_x:.1f}) should be >50 pts right of "
             f"first line x ({first_line_x:.1f}) to reflect indent"
         )
 
     def test_overlay_multiblock_with_lines(self):
-        """Múltiplos blocos com lines devem ser renderizados."""
+        """Multiple blocks with lines should be rendered."""
         import pdfplumber
         from src.exporters.searchable_pdf import _create_text_overlay
 
@@ -738,21 +738,21 @@ class TestPerLineOverlay:
             blocks=[
                 Block(
                     block_id="p1_b1", type=BlockType.PARAGRAPH,
-                    text="Bloco A linha 1\nBloco A linha 2",
+                    text="Block A line 1\nBlock A line 2",
                     bbox=[0.1, 0.05, 0.9, 0.15],
                     confidence=0.9,
                     lines=[
-                        {"text": "Bloco A linha 1", "bbox": [0.1, 0.05, 0.9, 0.10]},
-                        {"text": "Bloco A linha 2", "bbox": [0.1, 0.11, 0.9, 0.15]},
+                        {"text": "Block A line 1", "bbox": [0.1, 0.05, 0.9, 0.10]},
+                        {"text": "Block A line 2", "bbox": [0.1, 0.11, 0.9, 0.15]},
                     ],
                 ),
                 Block(
                     block_id="p1_b2", type=BlockType.PARAGRAPH,
-                    text="Bloco B unica linha",
+                    text="Block B single line",
                     bbox=[0.1, 0.50, 0.85, 0.55],
                     confidence=0.9,
                     lines=[
-                        {"text": "Bloco B unica linha", "bbox": [0.1, 0.50, 0.85, 0.55]},
+                        {"text": "Block B single line", "bbox": [0.1, 0.50, 0.85, 0.55]},
                     ],
                 ),
             ],
@@ -763,9 +763,9 @@ class TestPerLineOverlay:
         with pdfplumber.open(io.BytesIO(result)) as pdf:
             text = pdf.pages[0].extract_text() or ""
 
-        assert "Bloco A linha 1" in text
-        assert "Bloco A linha 2" in text
-        assert "Bloco B unica linha" in text
+        assert "Block A line 1" in text
+        assert "Block A line 2" in text
+        assert "Block B single line" in text
 
 
 # =========================================================================
@@ -773,10 +773,10 @@ class TestPerLineOverlay:
 # =========================================================================
 
 class TestFallbackOverlay:
-    """Testes para fallback: blocks sem lines devem usar distribuição uniforme."""
+    """Tests for fallback: blocks without lines should use uniform distribution."""
 
     def _make_page_without_lines(self):
-        """Página com blocos SEM dados de lines (backward compat)."""
+        """Page with blocks WITHOUT lines data (backward compat)."""
         return Page(
             page=1,
             source="ocr",
@@ -784,10 +784,10 @@ class TestFallbackOverlay:
                 Block(
                     block_id="p1_b1",
                     type=BlockType.PARAGRAPH,
-                    text="Linha A no bloco\nLinha B no bloco",
+                    text="Line A in block\nLine B in block",
                     bbox=[0.1, 0.1, 0.9, 0.25],
                     confidence=0.9,
-                    lines=None,  # sem dados de line!
+                    lines=None,  # no line data!
                 ),
             ],
             width=595.0,
@@ -802,7 +802,7 @@ class TestFallbackOverlay:
         assert result[:5] == b"%PDF-"
 
     def test_fallback_text_extractable(self):
-        """Texto deve ser extraível mesmo sem dados de lines."""
+        """Text should be extractable even without lines data."""
         import pdfplumber
         from src.exporters.searchable_pdf import _create_text_overlay
 
@@ -812,11 +812,11 @@ class TestFallbackOverlay:
         with pdfplumber.open(io.BytesIO(result)) as pdf:
             text = pdf.pages[0].extract_text() or ""
 
-        assert "Linha A no bloco" in text
-        assert "Linha B no bloco" in text
+        assert "Line A in block" in text
+        assert "Line B in block" in text
 
     def test_fallback_multiple_lines_distinct_positions(self):
-        """Linhas no fallback devem estar em posições Y distintas."""
+        """Lines in fallback should be at distinct Y positions."""
         import pdfplumber
         from src.exporters.searchable_pdf import _create_text_overlay
 
@@ -838,27 +838,27 @@ class TestFallbackOverlay:
 # =========================================================================
 
 class TestFontSizingFromLineHeight:
-    """Testes para que font_size derive da altura da linha (não largura)."""
+    """Tests that font_size derives from line height (not width)."""
 
     def test_font_size_proportional_to_line_height(self):
-        """Font size deve ser proporcional à altura do bbox da linha."""
+        """Font size should be proportional to the line bbox height."""
         import pdfplumber
         from src.exporters.searchable_pdf import _create_text_overlay
 
-        # Bloco com 2 linhas de alturas bem diferentes
+        # Block with 2 lines of very different heights
         page = Page(
             page=1, source="ocr",
             blocks=[
                 Block(
                     block_id="p1_b1", type=BlockType.PARAGRAPH,
-                    text="Linha pequena\nLinha GRANDE",
+                    text="Small line\nBIG line",
                     bbox=[0.1, 0.1, 0.9, 0.5],
                     confidence=0.9,
                     lines=[
-                        # Linha fina: 5% da página (~42 pts para A4)
-                        {"text": "Linha pequena", "bbox": [0.1, 0.10, 0.9, 0.15]},
-                        # Linha grossa: 25% da página (~210 pts)
-                        {"text": "Linha GRANDE", "bbox": [0.1, 0.25, 0.9, 0.50]},
+                        # Thin line: 5% of page (~42 pts for A4)
+                        {"text": "Small line", "bbox": [0.1, 0.10, 0.9, 0.15]},
+                        # Thick line: 25% of page (~210 pts)
+                        {"text": "BIG line", "bbox": [0.1, 0.25, 0.9, 0.50]},
                     ],
                 ),
             ],
@@ -871,9 +871,9 @@ class TestFontSizingFromLineHeight:
             chars = pdf.pages[0].chars
 
         if chars:
-            # Chars da "Linha pequena" devem ter font size menor que "Linha GRANDE"
-            small_chars = [c for c in chars if c["top"] < 200]  # parte superior
-            big_chars = [c for c in chars if c["top"] > 200]    # parte inferior
+            # Chars from "Small line" should have smaller font size than "BIG line"
+            small_chars = [c for c in chars if c["top"] < 200]  # upper part
+            big_chars = [c for c in chars if c["top"] > 200]    # lower part
 
             if small_chars and big_chars:
                 small_size = small_chars[0].get("size", small_chars[0].get("height", 0))
@@ -883,7 +883,7 @@ class TestFontSizingFromLineHeight:
                 )
 
     def test_horizontal_text_selection_not_vertical(self):
-        """Texto com lines data deve ser selecionável horizontalmente."""
+        """Text with lines data should be selectable horizontally."""
         import pdfplumber
         from src.exporters.searchable_pdf import _create_text_overlay
 
@@ -892,11 +892,11 @@ class TestFontSizingFromLineHeight:
             blocks=[
                 Block(
                     block_id="p1_b1", type=BlockType.PARAGRAPH,
-                    text="Este texto deve ser horizontal",
+                    text="This text should be horizontal",
                     bbox=[0.1, 0.1, 0.9, 0.15],
                     confidence=0.9,
                     lines=[
-                        {"text": "Este texto deve ser horizontal", "bbox": [0.1, 0.1, 0.9, 0.15]},
+                        {"text": "This text should be horizontal", "bbox": [0.1, 0.1, 0.9, 0.15]},
                     ],
                 ),
             ],
@@ -909,7 +909,7 @@ class TestFontSizingFromLineHeight:
             chars = pdf.pages[0].chars
 
         if chars:
-            # Todos os chars devem ter aproximadamente o mesmo top (horizontal)
+            # All chars should have approximately the same top (horizontal)
             tops = [round(c["top"], 0) for c in chars]
             unique_tops = set(tops)
             assert len(unique_tops) <= 2, (
@@ -918,11 +918,11 @@ class TestFontSizingFromLineHeight:
 
 
 # =========================================================================
-# Cycle C1: Config para orientação de página
+# Cycle C1: Config for page orientation
 # =========================================================================
 
 class TestConfigOrientation:
-    """Testes para opções de configuração de orientação de página."""
+    """Tests for page orientation configuration options."""
 
     def test_config_has_assume_straight_pages(self):
         import config
@@ -933,7 +933,7 @@ class TestConfigOrientation:
         assert isinstance(config.ASSUME_STRAIGHT_PAGES, bool)
 
     def test_config_assume_straight_pages_default_false(self):
-        """Padrão deve ser False para detectar texto rotacionado."""
+        """Default should be False to detect rotated text."""
         import config
         assert config.ASSUME_STRAIGHT_PAGES is False
 
@@ -946,7 +946,7 @@ class TestConfigOrientation:
         assert isinstance(config.DETECT_ORIENTATION, bool)
 
     def test_config_detect_orientation_default_true(self):
-        """Padrão deve ser True para corrigir orientação automaticamente."""
+        """Default should be True to automatically correct orientation."""
         import config
         assert config.DETECT_ORIENTATION is True
 
@@ -964,14 +964,14 @@ class TestConfigOrientation:
 
 
 # =========================================================================
-# Cycle C2: DocTREngine usa config de orientação
+# Cycle C2: DocTREngine uses orientation config
 # =========================================================================
 
 class TestDocTREngineOrientation:
-    """Testes para DocTREngine aceitar configuração de orientação."""
+    """Tests for DocTREngine accepting orientation configuration."""
 
     def test_engine_passes_assume_straight_pages_to_predictor(self):
-        """DocTREngine deve usar config.ASSUME_STRAIGHT_PAGES no ocr_predictor."""
+        """DocTREngine should use config.ASSUME_STRAIGHT_PAGES in ocr_predictor."""
         from unittest.mock import patch, MagicMock
 
         mock_predictor = MagicMock()
@@ -990,14 +990,14 @@ class TestDocTREngineOrientation:
 
             engine = ocr_mod.DocTREngine(device='cpu')
 
-            # Verifica que ocr_predictor foi chamado com assume_straight_pages do config
+            # Verify that ocr_predictor was called with assume_straight_pages from config
             call_kwargs = mock_predictor_func.call_args
             assert 'assume_straight_pages' in call_kwargs.kwargs or \
                    len(call_kwargs.args) > 3, \
-                "ocr_predictor deve receber assume_straight_pages"
+                "ocr_predictor should receive assume_straight_pages"
 
     def test_engine_passes_detect_orientation_to_predictor(self):
-        """DocTREngine deve usar config.DETECT_ORIENTATION no ocr_predictor."""
+        """DocTREngine should use config.DETECT_ORIENTATION in ocr_predictor."""
         from unittest.mock import patch, MagicMock
 
         mock_predictor = MagicMock()
@@ -1016,4 +1016,4 @@ class TestDocTREngineOrientation:
 
             call_kwargs = mock_predictor_func.call_args
             assert 'detect_orientation' in call_kwargs.kwargs, \
-                "ocr_predictor deve receber detect_orientation"
+                "ocr_predictor should receive detect_orientation"

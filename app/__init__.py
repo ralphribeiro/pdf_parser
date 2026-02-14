@@ -1,3 +1,3 @@
 """
-Camada HTTP da API de processamento de documentos.
+HTTP layer for the document processing API.
 """

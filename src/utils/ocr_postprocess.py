@@ -1,11 +1,11 @@
 """
-Pós-processamento de texto OCR
+OCR text post-processing
 
-Funções para limpar e melhorar texto extraído por OCR:
-- Remoção de ruído e caracteres inválidos
-- Correção de espaçamento
-- Remoção de linhas muito curtas
-- União de palavras quebradas
+Functions to clean and improve OCR-extracted text:
+- Noise and invalid character removal
+- Spacing correction
+- Short line removal
+- Broken word merging
 """
 import re
 from typing import List, Set, Optional
@@ -13,40 +13,40 @@ from typing import List, Set, Optional
 
 def clean_ocr_text(text: str) -> str:
     """
-    Limpa texto extraído por OCR removendo ruído comum
+    Clean OCR-extracted text by removing common noise.
 
     Args:
-        text: texto bruto do OCR
+        text: raw OCR text
 
     Returns:
-        texto limpo
+        cleaned text
     """
     if not text:
         return ""
 
-    # Remove caracteres de ruído comum do OCR
-    # Mantém letras, números, pontuação básica e acentos
+    # Remove common OCR noise characters
+    # Keep letters, numbers, basic punctuation and accents
     noise_chars = r'[|\\{}\[\]<>©®™°§¶†‡•◦▪▫●○◆◇★☆♦♠♣♥]'
     text = re.sub(noise_chars, '', text)
 
-    # Remove sequências de caracteres repetidos (ex: "====", "----", "____")
+    # Remove repeated character sequences (e.g., "====", "----", "____")
     text = re.sub(r'([=\-_*#~])\1{3,}', '', text)
 
-    # Remove espaços antes de pontuação
+    # Remove spaces before punctuation
     text = re.sub(r'\s+([.,;:!?)])', r'\1', text)
 
-    # Adiciona espaço após pontuação se não houver
+    # Add space after punctuation if missing
     text = re.sub(r'([.,;:!?])([A-ZÀ-Úa-zà-ú])', r'\1 \2', text)
 
-    # Remove espaços múltiplos
+    # Remove multiple spaces
     text = re.sub(r'[ \t]+', ' ', text)
 
-    # Remove linhas com apenas números/símbolos (geralmente ruído)
+    # Remove lines with only numbers/symbols (usually noise)
     lines = text.split('\n')
     cleaned_lines = []
     for line in lines:
         line = line.strip()
-        # Mantém linha se tiver pelo menos 2 caracteres alfabéticos
+        # Keep line if it has at least 2 alphabetic characters
         if len(re.findall(r'[A-Za-zÀ-ú]', line)) >= 2:
             cleaned_lines.append(line)
 
@@ -55,14 +55,14 @@ def clean_ocr_text(text: str) -> str:
 
 def remove_short_lines(text: str, min_length: int = 3) -> str:
     """
-    Remove linhas muito curtas que geralmente são ruído
+    Remove very short lines that are usually noise.
 
     Args:
-        text: texto
-        min_length: comprimento mínimo para manter linha
+        text: text
+        min_length: minimum length to keep a line
 
     Returns:
-        texto sem linhas curtas
+        text without short lines
     """
     lines = text.split('\n')
     filtered = [line for line in lines if len(line.strip()) >= min_length]
@@ -71,33 +71,33 @@ def remove_short_lines(text: str, min_length: int = 3) -> str:
 
 def fix_common_ocr_errors(text: str) -> str:
     """
-    Corrige erros comuns de OCR em português
+    Fix common OCR errors in Portuguese text.
 
     Args:
-        text: texto com possíveis erros
+        text: text with possible errors
 
     Returns:
-        texto corrigido
+        corrected text
     """
     corrections = {
-        # Letras confundidas
-        r'\bRN\b': 'RN',  # Mantém RN (documento)
+        # Confused letters
+        r'\bRN\b': 'RN',  # Keep RN (document)
         r'l<': 'k',
-        r'\bl\b(?=[A-Z])': 'I',  # l sozinho antes de maiúscula -> I
-        r'(?<=[a-z])O(?=[a-z])': 'o',  # O entre minúsculas -> o
-        r'(?<=[A-Z])o(?=[A-Z])': 'O',  # o entre maiúsculas -> O
+        r'\bl\b(?=[A-Z])': 'I',  # lone l before uppercase -> I
+        r'(?<=[a-z])O(?=[a-z])': 'o',  # O between lowercase -> o
+        r'(?<=[A-Z])o(?=[A-Z])': 'O',  # o between uppercase -> O
 
-        # Números confundidos com letras
-        r'(?<=[A-Za-z])0(?=[A-Za-z])': 'O',  # 0 entre letras -> O
-        r'(?<=[0-9])O(?=[0-9])': '0',  # O entre números -> 0
-        r'(?<=[A-Za-z])1(?=[A-Za-z])': 'l',  # 1 entre letras -> l
-        r'(?<=[0-9])l(?=[0-9])': '1',  # l entre números -> 1
+        # Numbers confused with letters
+        r'(?<=[A-Za-z])0(?=[A-Za-z])': 'O',  # 0 between letters -> O
+        r'(?<=[0-9])O(?=[0-9])': '0',  # O between numbers -> 0
+        r'(?<=[A-Za-z])1(?=[A-Za-z])': 'l',  # 1 between letters -> l
+        r'(?<=[0-9])l(?=[0-9])': '1',  # l between numbers -> 1
 
-        # Palavras comuns mal reconhecidas (português jurídico)
+        # Commonly misrecognized words (Portuguese legal)
         r'\bDl<\b': 'DK',
         r'\bNQ\b': 'Nº',
         r'\bn2\b': 'nº',
-        r'\bNR\b': 'NR',  # Mantém
+        r'\bNR\b': 'NR',  # Keep
     }
 
     for pattern, replacement in corrections.items():
@@ -108,21 +108,21 @@ def fix_common_ocr_errors(text: str) -> str:
 
 def merge_broken_words(text: str, min_word_length: int = 4) -> str:
     """
-    Tenta unir palavras que foram quebradas incorretamente
+    Attempt to merge words that were incorrectly split.
 
-    Exemplo: "TA BELIÃO" -> pode permanecer se não tivermos dicionário
+    Example: "TA BELIÃO" -> may remain if we don't have a dictionary
 
     Args:
-        text: texto
-        min_word_length: comprimento mínimo de fragmento para tentar unir
+        text: text
+        min_word_length: minimum fragment length to attempt merging
 
     Returns:
-        texto com palavras unidas
+        text with merged words
     """
-    # Padrão: palavra curta + espaço + palavra curta no início de palavra maior
-    # Ex: "COM ARCA" onde "COMARCA" seria esperado
+    # Pattern: short word + space + short word at the beginning of a larger word
+    # E.g., "COM ARCA" where "COMARCA" would be expected
 
-    # Esta é uma heurística simples - idealmente usaríamos um dicionário
+    # This is a simple heuristic — ideally we would use a dictionary
     lines = text.split('\n')
     fixed_lines = []
 
@@ -132,18 +132,18 @@ def merge_broken_words(text: str, min_word_length: int = 4) -> str:
             fixed_lines.append(line)
             continue
 
-        # Tenta unir fragmentos muito curtos
+        # Attempt to merge very short fragments
         merged = []
         i = 0
         while i < len(words):
             word = words[i]
 
-            # Se palavra é muito curta e próxima também é
+            # If word is very short and the next one is too
             if (len(word) <= 2 and
                 i + 1 < len(words) and
                 len(words[i + 1]) >= 2 and
                 word.isupper() == words[i + 1].isupper()):
-                # Une as palavras
+                # Merge the words
                 merged.append(word + words[i + 1])
                 i += 2
             else:
@@ -157,18 +157,18 @@ def merge_broken_words(text: str, min_word_length: int = 4) -> str:
 
 def normalize_whitespace(text: str) -> str:
     """
-    Normaliza espaços em branco
+    Normalize whitespace.
 
     Args:
-        text: texto
+        text: text
 
     Returns:
-        texto com espaços normalizados
+        text with normalized whitespace
     """
-    # Remove espaços no início/fim de linhas
+    # Remove spaces at the beginning/end of lines
     lines = [line.strip() for line in text.split('\n')]
 
-    # Remove linhas vazias consecutivas
+    # Remove consecutive empty lines
     cleaned = []
     prev_empty = False
     for line in lines:
@@ -188,17 +188,17 @@ def postprocess_ocr_text(text: str,
                         merge_words: bool = False,
                         min_line_length: int = 3) -> str:
     """
-    Pipeline completo de pós-processamento de texto OCR
+    Complete OCR text post-processing pipeline.
 
     Args:
-        text: texto bruto do OCR
-        clean: aplicar limpeza de ruído
-        fix_errors: corrigir erros comuns
-        merge_words: tentar unir palavras quebradas
-        min_line_length: comprimento mínimo de linha
+        text: raw OCR text
+        clean: apply noise cleaning
+        fix_errors: fix common errors
+        merge_words: attempt to merge broken words
+        min_line_length: minimum line length
 
     Returns:
-        texto processado
+        processed text
     """
     if not text:
         return ""

@@ -1,12 +1,12 @@
 """
-Configurações do pipeline de extração de documentos.
+Document extraction pipeline configuration.
 
-Todas as configurações podem ser sobrescritas via variáveis de ambiente
-com prefixo DOC_PARSER_. Exemplo: DOC_PARSER_OCR_ENGINE=tesseract
+All settings can be overridden via environment variables
+with the DOC_PARSER_ prefix. Example: DOC_PARSER_OCR_ENGINE=tesseract
 
-Valores default são mantidos para backward-compat com uso direto:
+Default values are kept for backward compatibility with direct usage:
     import config
-    config.VERBOSE  # True (ou o valor da env var)
+    config.VERBOSE  # True (or the env var value)
 """
 import logging
 import os
@@ -18,11 +18,11 @@ load_dotenv(override=False)
 
 
 # ---------------------------------------------------------------------------
-# Helpers para conversão de tipos de env vars
+# Helpers for env var type conversion
 # ---------------------------------------------------------------------------
 
 def _env_bool(key: str, default: bool) -> bool:
-    """Lê env var como bool. Aceita true/1/yes (case-insensitive)."""
+    """Read env var as bool. Accepts true/1/yes (case-insensitive)."""
     val = os.getenv(key)
     if val is None:
         return default
@@ -30,19 +30,19 @@ def _env_bool(key: str, default: bool) -> bool:
 
 
 def _env_int(key: str, default: int) -> int:
-    """Lê env var como int."""
+    """Read env var as int."""
     val = os.getenv(key)
     return int(val) if val is not None else default
 
 
 def _env_float(key: str, default: float) -> float:
-    """Lê env var como float."""
+    """Read env var as float."""
     val = os.getenv(key)
     return float(val) if val is not None else default
 
 
 def _env_int_or_none(key: str, default: int | None) -> int | None:
-    """Lê env var como int, preservando None como default."""
+    """Read env var as int, preserving None as default."""
     val = os.getenv(key)
     if val is None:
         return default
@@ -50,7 +50,7 @@ def _env_int_or_none(key: str, default: int | None) -> int | None:
 
 
 # ---------------------------------------------------------------------------
-# Diretórios
+# Directories
 # ---------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).parent
@@ -67,7 +67,7 @@ _gpu_env = os.getenv("DOC_PARSER_USE_GPU")
 if _gpu_env is not None:
     USE_GPU = _gpu_env.lower() in ("true", "1", "yes")
 else:
-    # Auto-detect: importa torch apenas quando necessário
+    # Auto-detect: imports torch only when needed
     try:
         import torch
         USE_GPU = torch.cuda.is_available()
@@ -77,17 +77,17 @@ else:
 DEVICE = "cuda" if USE_GPU else "cpu"
 
 # ---------------------------------------------------------------------------
-# OCR - Configurações Gerais
+# OCR - General Settings
 # ---------------------------------------------------------------------------
 
 OCR_ENGINE = os.getenv("DOC_PARSER_OCR_ENGINE", "doctr")
 OCR_DPI = _env_int("DOC_PARSER_OCR_DPI", 350)
-IMAGE_DPI = OCR_DPI  # Alias para compatibilidade
+IMAGE_DPI = OCR_DPI  # Alias for compatibility
 MIN_CONFIDENCE = _env_float("DOC_PARSER_MIN_CONFIDENCE", 0.3)
 OCR_BATCH_SIZE = _env_int("DOC_PARSER_OCR_BATCH_SIZE", 20)
 
 # ---------------------------------------------------------------------------
-# OCR - Orientação de página (docTR)
+# OCR - Page Orientation (docTR)
 # ---------------------------------------------------------------------------
 
 ASSUME_STRAIGHT_PAGES = _env_bool("DOC_PARSER_ASSUME_STRAIGHT_PAGES", True)
@@ -95,7 +95,7 @@ DETECT_ORIENTATION = _env_bool("DOC_PARSER_DETECT_ORIENTATION", False)
 STRAIGHTEN_PAGES = _env_bool("DOC_PARSER_STRAIGHTEN_PAGES", False)
 
 # ---------------------------------------------------------------------------
-# OCR - Tesseract (se OCR_ENGINE = 'tesseract')
+# OCR - Tesseract (if OCR_ENGINE = 'tesseract')
 # ---------------------------------------------------------------------------
 
 OCR_LANG = os.getenv("DOC_PARSER_OCR_LANG", "por")
@@ -104,7 +104,7 @@ TESSERACT_CONFIG = os.getenv(
 )
 
 # ---------------------------------------------------------------------------
-# OCR - Pós-processamento
+# OCR - Post-processing
 # ---------------------------------------------------------------------------
 
 OCR_POSTPROCESS = _env_bool("DOC_PARSER_OCR_POSTPROCESS", True)
@@ -112,8 +112,8 @@ OCR_FIX_ERRORS = _env_bool("DOC_PARSER_OCR_FIX_ERRORS", True)
 OCR_MIN_LINE_LENGTH = _env_int("DOC_PARSER_OCR_MIN_LINE_LENGTH", 3)
 
 # ---------------------------------------------------------------------------
-# Pré-processamento de imagem (DESATIVADO - degrada qualidade do OCR)
-# O docTR e Tesseract fazem seu próprio pré-processamento internamente
+# Image preprocessing (DISABLED - degrades OCR quality)
+# docTR and Tesseract handle their own preprocessing internally
 # ---------------------------------------------------------------------------
 
 OCR_PREPROCESS = False
@@ -122,7 +122,7 @@ DENOISE_KERNEL_SIZE = 3
 DESKEW_ANGLE_THRESHOLD = 0.5
 
 # ---------------------------------------------------------------------------
-# Tabelas
+# Tables
 # ---------------------------------------------------------------------------
 
 TABLE_DETECTION_CONFIDENCE = _env_float(
@@ -131,7 +131,7 @@ TABLE_DETECTION_CONFIDENCE = _env_float(
 CAMELOT_FLAVOR = os.getenv("DOC_PARSER_CAMELOT_FLAVOR", "lattice")
 
 # ---------------------------------------------------------------------------
-# Detecção de tipo de página (digital vs scan)
+# Page type detection (digital vs scan)
 # ---------------------------------------------------------------------------
 
 IMAGE_AREA_THRESHOLD = _env_float("DOC_PARSER_IMAGE_AREA_THRESHOLD", 0.3)
@@ -140,13 +140,13 @@ TEXT_COVERAGE_THRESHOLD = _env_float(
 )
 
 # ---------------------------------------------------------------------------
-# PDF pesquisável (searchable PDF)
+# Searchable PDF
 # ---------------------------------------------------------------------------
 
 SEARCHABLE_PDF = _env_bool("DOC_PARSER_SEARCHABLE_PDF", True)
 
 # ---------------------------------------------------------------------------
-# Paralelização
+# Parallelization
 # ---------------------------------------------------------------------------
 
 PARALLEL_ENABLED = _env_bool("DOC_PARSER_PARALLEL_ENABLED", True)
@@ -174,12 +174,12 @@ LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 def _resolve_log_level() -> int:
     """
-    Determina o nível de log efetivo.
+    Determine the effective log level.
 
-    Prioridade:
-    1. DOC_PARSER_LOG_LEVEL (se definido): DEBUG, INFO, WARNING, ERROR
-    2. VERBOSE=True  → INFO
-    3. VERBOSE=False → WARNING
+    Priority:
+    1. DOC_PARSER_LOG_LEVEL (if set): DEBUG, INFO, WARNING, ERROR
+    2. VERBOSE=True  -> INFO
+    3. VERBOSE=False -> WARNING
     """
     if LOG_LEVEL and hasattr(logging, LOG_LEVEL):
         return getattr(logging, LOG_LEVEL)
@@ -188,15 +188,15 @@ def _resolve_log_level() -> int:
 
 def setup_logging() -> None:
     """
-    Configura logging padrão do projeto e alinha os loggers do uvicorn.
+    Configure project-wide logging and align uvicorn loggers.
 
-    Garante que toda saída (aplicação + uvicorn.error + uvicorn.access)
-    use o mesmo formato e nível.
+    Ensures that all output (application + uvicorn.error + uvicorn.access)
+    uses the same format and level.
     """
     level = _resolve_log_level()
     formatter = logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 
-    # Root logger (aplicação)
+    # Root logger (application)
     logging.basicConfig(
         level=level,
         format=LOG_FORMAT,
@@ -204,8 +204,8 @@ def setup_logging() -> None:
         force=True,
     )
 
-    # Uvicorn loggers — usam handlers próprios com formato diferente.
-    # Sobrescreve formatter e nível para alinhar com o projeto.
+    # Uvicorn loggers — use their own handlers with different format.
+    # Override formatter and level to align with the project.
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         uv_logger = logging.getLogger(name)
         uv_logger.setLevel(level)

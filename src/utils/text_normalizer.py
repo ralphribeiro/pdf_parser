@@ -1,5 +1,5 @@
 """
-Funções para normalização e limpeza de texto extraído
+Functions for normalizing and cleaning extracted text
 """
 import re
 from typing import List
@@ -7,29 +7,29 @@ from typing import List
 
 def normalize_text(text: str, remove_extra_whitespace: bool = True) -> str:
     """
-    Normaliza texto extraído
+    Normalize extracted text.
 
     Args:
-        text: texto bruto
-        remove_extra_whitespace: remover espaços extras
+        text: raw text
+        remove_extra_whitespace: remove extra spaces
 
     Returns:
-        texto normalizado
+        normalized text
     """
     if not text:
         return ""
 
-    # Remove caracteres de controle (exceto quebras de linha e tabs)
+    # Remove control characters (except line breaks and tabs)
     text = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]', '', text)
 
     if remove_extra_whitespace:
-        # Remove espaços múltiplos
+        # Remove multiple spaces
         text = re.sub(r' +', ' ', text)
 
-        # Remove espaços no início e fim de linhas
+        # Remove spaces at the beginning and end of lines
         lines = [line.strip() for line in text.split('\n')]
 
-        # Remove linhas vazias múltiplas
+        # Remove multiple empty lines
         cleaned_lines = []
         prev_empty = False
         for line in lines:
@@ -47,31 +47,31 @@ def normalize_text(text: str, remove_extra_whitespace: bool = True) -> str:
 
 def merge_hyphenated_words(text: str) -> str:
     """
-    Mescla palavras hifenizadas no fim de linha
+    Merge hyphenated words at end of line.
 
-    Exemplo:
-        "Isso é um exem-\nplo" -> "Isso é um exemplo"
+    Example:
+        "This is an exam-\nple" -> "This is an example"
     """
-    # Padrão: palavra + hífen + quebra de linha + palavra
+    # Pattern: word + hyphen + line break + word
     text = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', text)
     return text
 
 
 def remove_repeated_headers_footers(lines: List[str], min_repetitions: int = 3) -> List[str]:
     """
-    Remove cabeçalhos e rodapés repetidos
+    Remove repeated headers and footers.
 
     Args:
-        lines: linhas do documento
-        min_repetitions: número mínimo de repetições para considerar header/footer
+        lines: document lines
+        min_repetitions: minimum repetitions to consider header/footer
 
     Returns:
-        linhas filtradas
+        filtered lines
     """
     if len(lines) < min_repetitions * 2:
         return lines
 
-    # Detecta padrões repetidos no início (headers)
+    # Detect repeated patterns at the beginning (headers)
     first_lines = lines[:5]
     header_candidates = []
 
@@ -81,7 +81,7 @@ def remove_repeated_headers_footers(lines: List[str], min_repetitions: int = 3) 
             if count >= min_repetitions:
                 header_candidates.append(line.strip())
 
-    # Detecta padrões repetidos no fim (footers)
+    # Detect repeated patterns at the end (footers)
     last_lines = lines[-5:]
     footer_candidates = []
 
@@ -91,7 +91,7 @@ def remove_repeated_headers_footers(lines: List[str], min_repetitions: int = 3) 
             if count >= min_repetitions:
                 footer_candidates.append(line.strip())
 
-    # Remove headers e footers
+    # Remove headers and footers
     filtered = []
     for line in lines:
         stripped = line.strip()
@@ -103,15 +103,15 @@ def remove_repeated_headers_footers(lines: List[str], min_repetitions: int = 3) 
 
 def clean_ocr_artifacts(text: str) -> str:
     """
-    Remove artefatos comuns de OCR
+    Remove common OCR artifacts.
     """
-    # Remove caracteres isolados estranhos
+    # Remove isolated strange characters
     text = re.sub(r'\s[•·∙■□▪▫]\s', ' ', text)
 
-    # Corrige espaços antes de pontuação
+    # Fix spaces before punctuation
     text = re.sub(r'\s+([.,;:!?])', r'\1', text)
 
-    # Corrige múltiplos pontos
+    # Fix multiple dots
     text = re.sub(r'\.{3,}', '...', text)
 
     return text
@@ -119,8 +119,8 @@ def clean_ocr_artifacts(text: str) -> str:
 
 def split_into_sentences(text: str) -> List[str]:
     """
-    Divide texto em sentenças (útil para chunking posterior)
+    Split text into sentences (useful for later chunking).
     """
-    # Padrão simples de detecção de fim de sentença
+    # Simple sentence-end detection pattern
     sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZÀ-Ú])', text)
     return [s.strip() for s in sentences if s.strip()]

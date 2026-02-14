@@ -1,5 +1,5 @@
 """
-Schemas Pydantic para validação da estrutura de saída JSON
+Pydantic schemas for JSON output structure validation
 """
 from typing import List, Literal, Optional
 from datetime import datetime
@@ -8,7 +8,7 @@ from enum import Enum
 
 
 class BlockType(str, Enum):
-    """Tipos de blocos de conteúdo"""
+    """Content block types"""
     PARAGRAPH = "paragraph"
     TABLE = "table"
     HEADER = "header"
@@ -18,24 +18,24 @@ class BlockType(str, Enum):
 
 
 class BBox(BaseModel):
-    """Bounding box normalizado (0-1)"""
-    x1: float = Field(ge=0.0, le=1.0, description="Coordenada X superior esquerda")
-    y1: float = Field(ge=0.0, le=1.0, description="Coordenada Y superior esquerda")
-    x2: float = Field(ge=0.0, le=1.0, description="Coordenada X inferior direita")
-    y2: float = Field(ge=0.0, le=1.0, description="Coordenada Y inferior direita")
+    """Normalized bounding box (0-1)"""
+    x1: float = Field(ge=0.0, le=1.0, description="Top-left X coordinate")
+    y1: float = Field(ge=0.0, le=1.0, description="Top-left Y coordinate")
+    x2: float = Field(ge=0.0, le=1.0, description="Bottom-right X coordinate")
+    y2: float = Field(ge=0.0, le=1.0, description="Bottom-right Y coordinate")
 
     def to_list(self) -> List[float]:
-        """Retorna bbox como lista [x1, y1, x2, y2]"""
+        """Return bbox as list [x1, y1, x2, y2]"""
         return [self.x1, self.y1, self.x2, self.y2]
 
     @classmethod
     def from_list(cls, bbox: List[float]) -> 'BBox':
-        """Cria BBox a partir de lista [x1, y1, x2, y2]"""
+        """Create BBox from list [x1, y1, x2, y2]"""
         return cls(x1=bbox[0], y1=bbox[1], x2=bbox[2], y2=bbox[3])
 
     @classmethod
     def from_absolute(cls, bbox: List[float], page_width: float, page_height: float) -> 'BBox':
-        """Converte coordenadas absolutas para relativas (0-1)"""
+        """Convert absolute coordinates to relative (0-1)"""
         return cls(
             x1=bbox[0] / page_width,
             y1=bbox[1] / page_height,
@@ -45,35 +45,35 @@ class BBox(BaseModel):
 
 
 class Block(BaseModel):
-    """Bloco de conteúdo (parágrafo, tabela, etc)"""
-    block_id: str = Field(description="ID único do bloco (ex: p1_b1)")
-    type: BlockType = Field(description="Tipo do bloco")
-    text: Optional[str] = Field(default=None, description="Texto do bloco (se aplicável)")
-    bbox: List[float] = Field(description="Bounding box [x1, y1, x2, y2] normalizado")
-    confidence: float = Field(ge=0.0, le=1.0, default=1.0, description="Confiança da extração")
-    rows: Optional[List[List[str]]] = Field(default=None, description="Linhas da tabela (se type=table)")
-    lines: Optional[List[dict]] = Field(default=None, description="Linhas individuais com bbox: [{'text': str, 'bbox': [x1,y1,x2,y2]}]")
+    """Content block (paragraph, table, etc.)"""
+    block_id: str = Field(description="Unique block ID (e.g., p1_b1)")
+    type: BlockType = Field(description="Block type")
+    text: Optional[str] = Field(default=None, description="Block text (if applicable)")
+    bbox: List[float] = Field(description="Bounding box [x1, y1, x2, y2] normalized")
+    confidence: float = Field(ge=0.0, le=1.0, default=1.0, description="Extraction confidence")
+    rows: Optional[List[List[str]]] = Field(default=None, description="Table rows (if type=table)")
+    lines: Optional[List[dict]] = Field(default=None, description="Individual lines with bbox: [{'text': str, 'bbox': [x1,y1,x2,y2]}]")
 
     class Config:
         use_enum_values = True
 
 
 class Page(BaseModel):
-    """Página do documento"""
-    page: int = Field(ge=1, description="Número da página")
-    source: Literal["digital", "ocr"] = Field(description="Método de extração")
-    blocks: List[Block] = Field(default_factory=list, description="Blocos de conteúdo da página")
-    width: Optional[float] = Field(default=None, description="Largura da página (pts)")
-    height: Optional[float] = Field(default=None, description="Altura da página (pts)")
+    """Document page"""
+    page: int = Field(ge=1, description="Page number")
+    source: Literal["digital", "ocr"] = Field(description="Extraction method")
+    blocks: List[Block] = Field(default_factory=list, description="Page content blocks")
+    width: Optional[float] = Field(default=None, description="Page width (pts)")
+    height: Optional[float] = Field(default=None, description="Page height (pts)")
 
 
 class Document(BaseModel):
-    """Documento completo processado"""
-    doc_id: str = Field(description="ID do documento")
-    source_file: str = Field(description="Nome do arquivo PDF original")
-    total_pages: int = Field(ge=1, description="Total de páginas")
-    processing_date: datetime = Field(default_factory=datetime.now, description="Data de processamento")
-    pages: List[Page] = Field(default_factory=list, description="Páginas processadas")
+    """Complete processed document"""
+    doc_id: str = Field(description="Document ID")
+    source_file: str = Field(description="Original PDF filename")
+    total_pages: int = Field(ge=1, description="Total pages")
+    processing_date: datetime = Field(default_factory=datetime.now, description="Processing date")
+    pages: List[Page] = Field(default_factory=list, description="Processed pages")
 
     class Config:
         json_encoders = {
@@ -81,5 +81,5 @@ class Document(BaseModel):
         }
 
     def to_json_dict(self) -> dict:
-        """Exporta para dicionário JSON serializable"""
+        """Export to JSON-serializable dictionary"""
         return self.model_dump(mode='json')

@@ -1,9 +1,9 @@
 """
-Extrator OCR usando docTR (PyTorch)
+OCR extractor using docTR (PyTorch)
 
-IMPORTANTE: O docTR faz seu próprio pré-processamento internamente.
-Passar imagem binarizada/grayscale DEGRADA a qualidade do OCR.
-Sempre passar imagem RGB original em alta resolução.
+IMPORTANT: docTR handles its own preprocessing internally.
+Passing binarized/grayscale images DEGRADES OCR quality.
+Always pass the original RGB image in high resolution.
 """
 import logging
 from typing import List, Optional, Tuple
@@ -22,36 +22,36 @@ logger = logging.getLogger(__name__)
 
 class DocTREngine:
     """
-    Engine OCR usando docTR (mindee/doctr)
+    OCR engine using docTR (mindee/doctr)
 
-    Melhores práticas:
-    - Passar imagem RGB original (NÃO binarizada)
-    - DPI alto (300-400) melhora qualidade
+    Best practices:
+    - Pass original RGB image (NOT binarized)
+    - High DPI (300-400) improves quality
 
-    Configuração de orientação (via config.py):
-    - ASSUME_STRAIGHT_PAGES=False: detecta texto rotacionado (mais preciso, mais lento)
-    - DETECT_ORIENTATION=True: detecta e corrige orientação da página (0/90/180/270)
-    - STRAIGHTEN_PAGES=True: corrige páginas inclinadas automaticamente
+    Orientation settings (via config.py):
+    - ASSUME_STRAIGHT_PAGES=False: detects rotated text (more accurate, slower)
+    - DETECT_ORIENTATION=True: detects and corrects page orientation (0/90/180/270)
+    - STRAIGHTEN_PAGES=True: automatically corrects skewed pages
     """
     def __init__(self, device: str = None):
         """
-        Inicializa o engine OCR
+        Initialize the OCR engine.
 
         Args:
-            device: 'cuda' ou 'cpu' (se None, usa config.DEVICE)
+            device: 'cuda' or 'cpu' (if None, uses config.DEVICE)
         """
         from doctr.models import ocr_predictor
 
         self.device = device or config.DEVICE
 
-        # Configuração de orientação de página
+        # Page orientation settings
         assume_straight = getattr(config, 'ASSUME_STRAIGHT_PAGES', False)
         detect_orient = getattr(config, 'DETECT_ORIENTATION', True)
         straighten = getattr(config, 'STRAIGHTEN_PAGES', True)
 
-        # Carrega modelo docTR com configuração otimizada
-        # det_arch: arquitetura de detecção de texto
-        # reco_arch: arquitetura de reconhecimento de texto
+        # Load docTR model with optimized configuration
+        # det_arch: text detection architecture
+        # reco_arch: text recognition architecture
         self.model = ocr_predictor(
             det_arch='db_resnet50',
             reco_arch='crnn_vgg16_bn',
@@ -63,34 +63,34 @@ class DocTREngine:
 
         orient_info = []
         if not assume_straight:
-            orient_info.append("rotação detectada")
+            orient_info.append("rotation detected")
         if detect_orient:
-            orient_info.append("orientação auto")
+            orient_info.append("auto orientation")
         if straighten:
-            orient_info.append("endireitamento auto")
+            orient_info.append("auto straightening")
         orient_str = f" ({', '.join(orient_info)})" if orient_info else ""
-        logger.info("DocTR Engine inicializado no device: %s%s", self.device, orient_str)
+        logger.info("DocTR Engine initialized on device: %s%s", self.device, orient_str)
 
     def _prepare_image(self, image: np.ndarray) -> np.ndarray:
         """
-        Prepara uma imagem para processamento pelo docTR.
+        Prepare an image for docTR processing.
 
         Args:
-            image: imagem como numpy array
+            image: image as numpy array
 
         Returns:
-            imagem preparada (RGB, uint8)
+            prepared image (RGB, uint8)
         """
-        # docTR espera imagem RGB
+        # docTR expects RGB image
         if len(image.shape) == 2:
-            # Converte grayscale para RGB (não recomendado, mas suporta)
+            # Convert grayscale to RGB (not recommended, but supported)
             image = np.stack([image, image, image], axis=-1)
 
-        # Remove canal alpha se presente
+        # Remove alpha channel if present
         if len(image.shape) == 3 and image.shape[2] == 4:
             image = image[:, :, :3]
 
-        # docTR espera valores 0-255 uint8
+        # docTR expects 0-255 uint8 values
         if image.dtype != np.uint8:
             image = image.astype(np.uint8)
 
@@ -98,13 +98,13 @@ class DocTREngine:
 
     def extract_from_image(self, image: np.ndarray) -> dict:
         """
-        Extrai texto de uma imagem
+        Extract text from an image.
 
         Args:
-            image: imagem como numpy array RGB (NÃO passar grayscale/binarizada!)
+            image: image as RGB numpy array (do NOT pass grayscale/binarized!)
 
         Returns:
-            resultado do docTR
+            docTR result
         """
         prepared = self._prepare_image(image)
         result = self.model([prepared])
@@ -112,50 +112,50 @@ class DocTREngine:
 
     def extract_from_images_batch(self, images: List[np.ndarray]) -> dict:
         """
-        Extrai texto de múltiplas imagens em batch.
+        Extract text from multiple images in batch.
 
-        Mais eficiente que processar uma imagem por vez, especialmente com GPU.
-        O docTR internamente faz batching para maximizar throughput.
+        More efficient than processing one image at a time, especially with GPU.
+        docTR internally handles batching to maximize throughput.
 
         Args:
-            images: lista de imagens como numpy arrays RGB
+            images: list of images as RGB numpy arrays
 
         Returns:
-            resultado do docTR com múltiplas páginas
+            docTR result with multiple pages
         """
         if not images:
             return None
 
-        # Prepara todas as imagens
+        # Prepare all images
         prepared_images = [self._prepare_image(img) for img in images]
 
-        # Processa batch
+        # Process batch
         result = self.model(prepared_images)
 
         return result
 
 
-# Alias para compatibilidade
+# Alias for compatibility
 OCREngine = DocTREngine
 
 
 def extract_ocr_page(pdf_path: str, page_number: int,
-                    preprocess: bool = False,  # DESATIVADO por padrão - degrada qualidade
+                    preprocess: bool = False,  # DISABLED by default - degrades quality
                     ocr_engine: Optional[DocTREngine] = None) -> Tuple[List[Block], float, float]:
     """
-    Extrai conteúdo de uma página usando OCR
+    Extract content from a page using OCR.
 
     Args:
-        pdf_path: caminho para o PDF
-        page_number: número da página (1-indexed)
-        preprocess: NÃO USAR - mantido para compatibilidade
-        ocr_engine: engine OCR (se None, cria um novo)
+        pdf_path: path to the PDF
+        page_number: page number (1-indexed)
+        preprocess: DO NOT USE - kept for compatibility
+        ocr_engine: OCR engine (if None, creates a new one)
 
     Returns:
-        (blocos, largura, altura)
+        (blocks, width, height)
     """
-    # Converte página para imagem em alta resolução
-    # DPI alto é crucial para qualidade do OCR
+    # Convert page to high-resolution image
+    # High DPI is crucial for OCR quality
     dpi = getattr(config, 'OCR_DPI', config.IMAGE_DPI)
 
     images = convert_from_path(
@@ -171,31 +171,31 @@ def extract_ocr_page(pdf_path: str, page_number: int,
     image = images[0]
     page_width, page_height = image.size
 
-    # IMPORTANTE: Passar imagem RGB original SEM pré-processamento
-    # O docTR faz seu próprio pré-processamento otimizado internamente
-    # Binarização/grayscale DEGRADA a qualidade do OCR
+    # IMPORTANT: Pass original RGB image WITHOUT preprocessing
+    # docTR handles its own optimized preprocessing internally
+    # Binarization/grayscale DEGRADES OCR quality
     image_array = np.array(image)
 
-    # Fecha imagem PIL para evitar memory leak
-    # (pdf2image/Poppler mantém referências internas)
+    # Close PIL image to avoid memory leak
+    # (pdf2image/Poppler keeps internal references)
     image.close()
     del images
 
-    # Garante que é RGB (não RGBA)
+    # Ensure it's RGB (not RGBA)
     if len(image_array.shape) == 3 and image_array.shape[2] == 4:
         image_array = image_array[:, :, :3]
 
-    # Cria engine se necessário
+    # Create engine if needed
     if ocr_engine is None:
         ocr_engine = DocTREngine()
 
-    # Executa OCR
+    # Run OCR
     result = ocr_engine.extract_from_image(image_array)
 
-    # Processa resultado do docTR
+    # Process docTR result
     blocks = _parse_doctr_result(result, page_number, page_width, page_height)
 
-    # Ordena blocos por posição
+    # Sort blocks by position
     blocks = sort_blocks_by_position(blocks)
 
     return blocks, page_width, page_height
@@ -204,18 +204,18 @@ def extract_ocr_page(pdf_path: str, page_number: int,
 def _parse_doctr_result(result, page_number: int, page_width: float,
                        page_height: float) -> List[Block]:
     """
-    Parseia resultado do docTR e converte em blocos
+    Parse docTR result and convert to blocks.
     """
     blocks = []
     block_counter = 1
 
-    # docTR retorna estrutura: pages -> blocks -> lines -> words
+    # docTR returns structure: pages -> blocks -> lines -> words
     for page in result.pages:
         for block_data in page.blocks:
-            # Extrai texto do bloco
+            # Extract block text
             block_text = []
 
-            # Calcula bbox do bloco (união de todas as linhas)
+            # Calculate block bbox (union of all lines)
             all_line_bboxes = []
             total_confidence = 0
             word_count = 0
@@ -229,9 +229,9 @@ def _parse_doctr_result(result, page_number: int, page_width: float,
 
                 block_text.append(" ".join(line_text))
 
-                # Bbox da linha (docTR retorna coordenadas normalizadas)
+                # Line bbox (docTR returns normalized coordinates)
                 line_bbox = line.geometry
-                # line_bbox é ((x1, y1), (x2, y2)) normalizado
+                # line_bbox is ((x1, y1), (x2, y2)) normalized
                 all_line_bboxes.append([
                     line_bbox[0][0],  # x1
                     line_bbox[0][1],  # y1
@@ -242,14 +242,14 @@ def _parse_doctr_result(result, page_number: int, page_width: float,
             if not block_text:
                 continue
 
-            # Junta texto do bloco
+            # Join block text
             text = "\n".join(block_text)
             text = normalize_text(text)
 
             if not text:
                 continue
 
-            # Calcula bbox do bloco (união de todas as linhas)
+            # Calculate block bbox (union of all lines)
             if all_line_bboxes:
                 bbox = [
                     min(b[0] for b in all_line_bboxes),
@@ -260,14 +260,14 @@ def _parse_doctr_result(result, page_number: int, page_width: float,
             else:
                 bbox = [0.0, 0.0, 1.0, 1.0]
 
-            # Calcula confiança média
+            # Calculate average confidence
             confidence = total_confidence / word_count if word_count > 0 else 0.0
 
-            # Filtra blocos com confiança muito baixa
+            # Filter blocks with very low confidence
             if confidence < config.MIN_CONFIDENCE:
                 continue
 
-            # Preserva dados por linha (texto + bbox) para overlay preciso
+            # Preserve per-line data (text + bbox) for precise overlay
             lines_data = [
                 {"text": line_text, "bbox": line_bbox}
                 for line_text, line_bbox in zip(block_text, all_line_bboxes)

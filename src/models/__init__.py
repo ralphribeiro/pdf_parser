@@ -1,5 +1,5 @@
 """
-Modelos de dados Pydantic
+Pydantic data models
 """
 from .schemas import Block, Page, Document, BlockType
 

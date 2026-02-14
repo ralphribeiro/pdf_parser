@@ -1,11 +1,11 @@
 """
-FastAPI application factory e lifespan.
+FastAPI application factory and lifespan.
 
-O DocumentProcessor é criado uma única vez no startup (singleton)
-e compartilhado entre todas as requests via app.state.
-O gpu_semaphore serializa acesso à GPU entre requests concorrentes.
+The DocumentProcessor is created once at startup (singleton)
+and shared across all requests via app.state.
+The gpu_semaphore serializes GPU access between concurrent requests.
 
-Uso:
+Usage:
     uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 """
 import asyncio
@@ -18,7 +18,7 @@ from fastapi import FastAPI
 import config
 from app.routers.process import router as process_router
 
-# Configura logging centralizado do projeto antes de qualquer módulo emitir log
+# Configure centralized project logging before any module emits logs
 config.setup_logging()
 
 logger = logging.getLogger(__name__)
@@ -27,16 +27,16 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Gerencia ciclo de vida da aplicação.
+    Manage application lifecycle.
 
-    Startup:  carrega DocumentProcessor com modelo OCR na GPU.
-    Shutdown: libera recursos e limpa memória.
+    Startup:  loads DocumentProcessor with OCR model on GPU.
+    Shutdown: releases resources and cleans up memory.
     """
     # --- Startup ---
-    # Re-aplica logging após uvicorn ter criado seus handlers
+    # Re-apply logging after uvicorn has created its handlers
     config.setup_logging()
 
-    logger.info("Inicializando DocumentProcessor (device=%s)...", config.DEVICE)
+    logger.info("Initializing DocumentProcessor (device=%s)...", config.DEVICE)
 
     from src.pipeline import DocumentProcessor
 
@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
     app.state.gpu_semaphore = asyncio.Semaphore(1)
 
     logger.info(
-        "Processor pronto: engine=%s, device=%s",
+        "Processor ready: engine=%s, device=%s",
         processor.ocr_engine_type,
         config.DEVICE,
     )
@@ -53,24 +53,24 @@ async def lifespan(app: FastAPI):
     yield
 
     # --- Shutdown ---
-    logger.info("Encerrando: liberando recursos...")
+    logger.info("Shutting down: releasing resources...")
     app.state.processor.ocr_engine = None
     app.state.processor.tesseract_engine = None
     app.state.processor = None
     gc.collect()
-    logger.info("Shutdown completo.")
+    logger.info("Shutdown complete.")
 
 
 def create_app() -> FastAPI:
     """
-    Factory function para criar a aplicação FastAPI.
+    Factory function to create the FastAPI application.
 
-    Separada do módulo-level `app` para facilitar testes
-    (TestClient pode criar instâncias com lifespan controlado).
+    Separated from module-level `app` to facilitate testing
+    (TestClient can create instances with controlled lifespan).
     """
     application = FastAPI(
         title="Doc Parser API",
-        description="API para extração de texto e tabelas de PDFs via OCR",
+        description="API for text and table extraction from PDFs via OCR",
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -80,5 +80,5 @@ def create_app() -> FastAPI:
     return application
 
 
-# Instância global para uvicorn
+# Global instance for uvicorn
 app = create_app()

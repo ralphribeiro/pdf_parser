@@ -1,14 +1,14 @@
 """
-Extrator OCR usando Tesseract (pytesseract)
+OCR extractor using Tesseract (pytesseract)
 
-Tesseract 5.x com motor LSTM oferece:
-- Suporte nativo a português (por, por_BR)
-- Modelos treinados especificamente para cada idioma
-- Boa precisão em documentos escaneados
-- Rápido e leve
+Tesseract 5.x with LSTM engine offers:
+- Native Portuguese support (por, por_BR)
+- Models specifically trained for each language
+- Good accuracy on scanned documents
+- Fast and lightweight
 
-Requisitos:
-- Sistema: tesseract-ocr, tesseract-ocr-por
+Requirements:
+- System: tesseract-ocr, tesseract-ocr-por
 - Python: pytesseract
 """
 import logging
@@ -28,51 +28,51 @@ logger = logging.getLogger(__name__)
 
 class TesseractEngine:
     """
-    Engine OCR usando Tesseract via pytesseract
+    OCR engine using Tesseract via pytesseract.
     """
     def __init__(self, lang: str = None, config_str: str = None):
         """
-        Inicializa o engine Tesseract
+        Initialize the Tesseract engine.
 
         Args:
-            lang: idioma(s) para OCR (ex: 'por', 'por+eng')
-            config_str: configuração do Tesseract (ex: '--oem 1 --psm 3')
+            lang: language(s) for OCR (e.g., 'por', 'por+eng')
+            config_str: Tesseract configuration (e.g., '--oem 1 --psm 3')
         """
         import pytesseract
 
         self.pytesseract = pytesseract
         self.lang = lang or getattr(config, 'OCR_LANG', 'por')
 
-        # Configuração padrão otimizada para documentos
-        # --oem 1: LSTM engine (melhor qualidade)
-        # --psm 3: Automatic page segmentation (padrão)
-        # --psm 6: Assume uniform block of text (mais rápido)
+        # Default configuration optimized for documents
+        # --oem 1: LSTM engine (best quality)
+        # --psm 3: Automatic page segmentation (default)
+        # --psm 6: Assume uniform block of text (faster)
         default_config = '--oem 1 --psm 3'
         self.config = config_str or getattr(config, 'TESSERACT_CONFIG', default_config)
 
-        # Verifica se Tesseract está instalado
+        # Check if Tesseract is installed
         try:
             version = pytesseract.get_tesseract_version()
-            logger.info("Tesseract Engine inicializado: v%s, lang=%s", version, self.lang)
+            logger.info("Tesseract Engine initialized: v%s, lang=%s", version, self.lang)
         except Exception as e:
             raise RuntimeError(
-                f"Tesseract não encontrado. Instale com:\n"
+                f"Tesseract not found. Install with:\n"
                 f"  Ubuntu/Debian: sudo apt install tesseract-ocr tesseract-ocr-por\n"
                 f"  macOS: brew install tesseract tesseract-lang\n"
-                f"Erro: {e}"
+                f"Error: {e}"
             )
 
     def extract_from_image(self, image: Image.Image) -> Dict[str, Any]:
         """
-        Extrai texto de uma imagem com dados de posição
+        Extract text from an image with position data.
 
         Args:
-            image: imagem PIL
+            image: PIL image
 
         Returns:
-            dicionário com dados do OCR (text, conf, left, top, width, height, etc)
+            dictionary with OCR data (text, conf, left, top, width, height, etc.)
         """
-        # Extrai dados completos com posição de cada palavra
+        # Extract complete data with position of each word
         data = self.pytesseract.image_to_data(
             image,
             lang=self.lang,
@@ -83,13 +83,13 @@ class TesseractEngine:
 
     def extract_text_only(self, image: Image.Image) -> str:
         """
-        Extrai apenas o texto (mais rápido, sem posição)
+        Extract only the text (faster, no position data).
 
         Args:
-            image: imagem PIL
+            image: PIL image
 
         Returns:
-            texto extraído
+            extracted text
         """
         return self.pytesseract.image_to_string(
             image,
@@ -101,17 +101,17 @@ class TesseractEngine:
 def extract_ocr_page_tesseract(pdf_path: str, page_number: int,
                                ocr_engine: Optional[TesseractEngine] = None) -> Tuple[List[Block], float, float]:
     """
-    Extrai conteúdo de uma página usando Tesseract OCR
+    Extract content from a page using Tesseract OCR.
 
     Args:
-        pdf_path: caminho para o PDF
-        page_number: número da página (1-indexed)
-        ocr_engine: engine OCR (se None, cria um novo)
+        pdf_path: path to the PDF
+        page_number: page number (1-indexed)
+        ocr_engine: OCR engine (if None, creates a new one)
 
     Returns:
-        (blocos, largura, altura)
+        (blocks, width, height)
     """
-    # Converte página para imagem em alta resolução
+    # Convert page to high-resolution image
     dpi = getattr(config, 'OCR_DPI', config.IMAGE_DPI)
 
     images = convert_from_path(
@@ -127,22 +127,22 @@ def extract_ocr_page_tesseract(pdf_path: str, page_number: int,
     image = images[0]
     page_width, page_height = image.size
 
-    # Cria engine se necessário
+    # Create engine if needed
     if ocr_engine is None:
         ocr_engine = TesseractEngine()
 
-    # Executa OCR
+    # Run OCR
     data = ocr_engine.extract_from_image(image)
 
-    # Fecha imagem PIL para evitar memory leak
-    # (pdf2image/Poppler mantém referências internas)
+    # Close PIL image to avoid memory leak
+    # (pdf2image/Poppler keeps internal references)
     image.close()
     del images
 
-    # Processa resultado do Tesseract
+    # Process Tesseract result
     blocks = _parse_tesseract_result(data, page_number, page_width, page_height)
 
-    # Ordena blocos por posição
+    # Sort blocks by position
     blocks = sort_blocks_by_position(blocks)
 
     return blocks, page_width, page_height
@@ -151,9 +151,9 @@ def extract_ocr_page_tesseract(pdf_path: str, page_number: int,
 def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
                            page_width: float, page_height: float) -> List[Block]:
     """
-    Parseia resultado do Tesseract e converte em blocos
+    Parse Tesseract result and convert to blocks.
 
-    Tesseract retorna níveis:
+    Tesseract returns levels:
     - 1: page
     - 2: block
     - 3: paragraph
@@ -162,7 +162,7 @@ def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
     """
     blocks = []
 
-    # Agrupa palavras por bloco (level 2)
+    # Group words by block (level 2)
     current_block_num = -1
     current_block_words = []
     current_block_boxes = []
@@ -175,13 +175,13 @@ def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
         conf = int(data['conf'][i])
         block_num = data['block_num'][i]
 
-        # Ignora entradas vazias ou com confiança muito baixa
+        # Ignore empty entries or those with very low confidence
         if not text or conf < 0:
             continue
 
-        # Novo bloco detectado
+        # New block detected
         if block_num != current_block_num:
-            # Salva bloco anterior se existir
+            # Save previous block if exists
             if current_block_words:
                 block = _create_block_from_words(
                     current_block_words,
@@ -195,13 +195,13 @@ def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
                 if block:
                     blocks.append(block)
 
-            # Inicia novo bloco
+            # Start new block
             current_block_num = block_num
             current_block_words = []
             current_block_boxes = []
             current_block_confs = []
 
-        # Adiciona palavra ao bloco atual
+        # Add word to current block
         current_block_words.append(text)
         current_block_boxes.append({
             'left': data['left'][i],
@@ -211,7 +211,7 @@ def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
         })
         current_block_confs.append(conf)
 
-    # Salva último bloco
+    # Save last block
     if current_block_words:
         block = _create_block_from_words(
             current_block_words,
@@ -233,31 +233,31 @@ def _create_block_from_words(words: List[str], boxes: List[dict],
                             block_counter: int, page_width: float,
                             page_height: float) -> Optional[Block]:
     """
-    Cria um Block a partir de uma lista de palavras
+    Create a Block from a list of words.
     """
     if not words:
         return None
 
-    # Junta palavras em texto
+    # Join words into text
     text = ' '.join(words)
     text = normalize_text(text)
 
     if not text or len(text.strip()) < 2:
         return None
 
-    # Calcula bbox do bloco (união de todas as palavras)
+    # Calculate block bbox (union of all words)
     x1 = min(b['left'] for b in boxes)
     y1 = min(b['top'] for b in boxes)
     x2 = max(b['left'] + b['width'] for b in boxes)
     y2 = max(b['top'] + b['height'] for b in boxes)
 
-    # Normaliza bbox
+    # Normalize bbox
     bbox = normalize_bbox([x1, y1, x2, y2], page_width, page_height)
 
-    # Calcula confiança média (Tesseract usa 0-100)
+    # Calculate average confidence (Tesseract uses 0-100)
     confidence = sum(confs) / len(confs) / 100.0
 
-    # Filtra blocos com confiança muito baixa
+    # Filter blocks with very low confidence
     min_conf = getattr(config, 'MIN_CONFIDENCE', 0.3)
     if confidence < min_conf:
         return None

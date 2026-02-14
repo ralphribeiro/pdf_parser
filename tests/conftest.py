@@ -1,19 +1,19 @@
 """
-Fixtures compartilhadas para testes do doc_parser.
+Shared fixtures for doc_parser tests.
 
-Todas as fixtures que produzem arquivos usam tmp_path para evitar
-efeitos colaterais no filesystem do projeto.
+All fixtures that produce files use tmp_path to avoid
+side effects on the project filesystem.
 """
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
-# Adiciona raiz do projeto ao path (mesmo padrão de scripts/)
+# Add project root to path (same pattern as scripts/)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ---------------------------------------------------------------------------
-# Mock de dependências pesadas que não são necessárias nos testes unitários.
-# Isso permite importar src.pipeline e config sem ter torch/doctr instalados.
+# Mock heavy dependencies that are not needed in unit tests.
+# This allows importing src.pipeline and config without torch/doctr installed.
 # ---------------------------------------------------------------------------
 _HEAVY_DEPS = [
     "torch", "torch.cuda",
@@ -32,7 +32,7 @@ for _mod in _HEAVY_DEPS:
     if _mod not in sys.modules:
         sys.modules[_mod] = MagicMock()
 
-# torch.cuda.is_available() deve retornar False nos testes
+# torch.cuda.is_available() should return False in tests
 sys.modules["torch"].cuda.is_available.return_value = False
 
 import pytest
@@ -41,31 +41,31 @@ from src.models.schemas import Document, Page, Block, BlockType
 
 
 # ---------------------------------------------------------------------------
-# Fixtures de modelo (Document / Page / Block)
+# Model fixtures (Document / Page / Block)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
 def ocr_blocks():
-    """Blocos OCR realistas (baseados no benchmark), com dados por linha."""
+    """Realistic OCR blocks (based on benchmark), with per-line data."""
     return [
         Block(
             block_id="p3_b1",
             type=BlockType.PARAGRAPH,
-            text="Texto de teste para OCR",
+            text="OCR test text sample",
             bbox=[0.1, 0.05, 0.9, 0.15],
             confidence=0.92,
             lines=[
-                {"text": "Texto de teste para OCR", "bbox": [0.1, 0.05, 0.9, 0.15]},
+                {"text": "OCR test text sample", "bbox": [0.1, 0.05, 0.9, 0.15]},
             ],
         ),
         Block(
             block_id="p3_b2",
             type=BlockType.PARAGRAPH,
-            text="Segunda linha do documento escaneado",
+            text="Second line of the scanned document",
             bbox=[0.1, 0.20, 0.85, 0.30],
             confidence=0.88,
             lines=[
-                {"text": "Segunda linha do documento escaneado", "bbox": [0.1, 0.20, 0.85, 0.30]},
+                {"text": "Second line of the scanned document", "bbox": [0.1, 0.20, 0.85, 0.30]},
             ],
         ),
     ]
@@ -73,12 +73,12 @@ def ocr_blocks():
 
 @pytest.fixture
 def digital_blocks():
-    """Blocos de página digital."""
+    """Digital page blocks."""
     return [
         Block(
             block_id="p1_b1",
             type=BlockType.PARAGRAPH,
-            text="Conteúdo digital original",
+            text="Original digital content",
             bbox=[0.14, 0.10, 0.99, 0.50],
             confidence=1.0,
         ),
@@ -88,9 +88,9 @@ def digital_blocks():
 @pytest.fixture
 def sample_document(digital_blocks, ocr_blocks):
     """
-    Documento com 3 páginas: 2 digitais + 1 OCR.
+    Document with 3 pages: 2 digital + 1 OCR.
 
-    Dimensões padrão A4 em pontos (595 x 842).
+    Standard A4 dimensions in points (595 x 842).
     """
     page1 = Page(
         page=1, source="digital", blocks=digital_blocks,
@@ -101,7 +101,7 @@ def sample_document(digital_blocks, ocr_blocks):
             Block(
                 block_id="p2_b1",
                 type=BlockType.PARAGRAPH,
-                text="Página dois digital",
+                text="Page two digital",
                 bbox=[0.1, 0.1, 0.9, 0.5],
                 confidence=1.0,
             ),
@@ -123,17 +123,17 @@ def sample_document(digital_blocks, ocr_blocks):
 
 
 # ---------------------------------------------------------------------------
-# Fixtures de arquivo PDF (gerado via reportlab, sem dependência externa)
+# PDF file fixtures (generated via reportlab, no external dependencies)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
 def sample_pdf_path(tmp_path):
     """
-    Gera um PDF de 3 páginas no diretório temporário.
+    Generate a 3-page PDF in the temporary directory.
 
-    - Página 1: texto digital
-    - Página 2: texto digital
-    - Página 3: página em branco (simula scan)
+    - Page 1: digital text
+    - Page 2: digital text
+    - Page 3: blank page (simulates scan)
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen.canvas import Canvas
@@ -142,17 +142,17 @@ def sample_pdf_path(tmp_path):
     c = Canvas(str(pdf_path), pagesize=A4)
     width, height = A4  # 595.27, 841.89
 
-    # Página 1
+    # Page 1
     c.setFont("Helvetica", 12)
-    c.drawString(100, height - 100, "Conteúdo digital original")
+    c.drawString(100, height - 100, "Original digital content")
     c.showPage()
 
-    # Página 2
+    # Page 2
     c.setFont("Helvetica", 12)
-    c.drawString(100, height - 100, "Página dois digital")
+    c.drawString(100, height - 100, "Page two digital")
     c.showPage()
 
-    # Página 3 (em branco — simula scan)
+    # Page 3 (blank — simulates scan)
     c.showPage()
 
     c.save()
@@ -161,7 +161,7 @@ def sample_pdf_path(tmp_path):
 
 @pytest.fixture
 def output_dir(tmp_path):
-    """Diretório de saída temporário."""
+    """Temporary output directory."""
     out = tmp_path / "output"
     out.mkdir()
     return out

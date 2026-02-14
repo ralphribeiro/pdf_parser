@@ -1,9 +1,9 @@
 """
-Testes TDD para a API FastAPI.
+TDD tests for the FastAPI API.
 
-Escritos ANTES da implementação para definir o contrato HTTP.
-O DocumentProcessor é mockado -- estes testes validam a camada HTTP,
-não o pipeline de OCR.
+Written BEFORE implementation to define the HTTP contract.
+The DocumentProcessor is mocked -- these tests validate the HTTP layer,
+not the OCR pipeline.
 """
 import io
 import sys
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Adiciona raiz do projeto ao path
+# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 @pytest.fixture
 def mock_processor(sample_document):
-    """DocumentProcessor mockado que retorna sample_document."""
+    """Mocked DocumentProcessor that returns sample_document."""
     processor = MagicMock()
     processor.use_gpu = False
     processor.ocr_engine_type = "doctr"
@@ -41,7 +41,7 @@ def mock_processor(sample_document):
             json.dump(document.to_json_dict(), f)
 
     def fake_save_pdf(document, pdf_path, output_path):
-        """Gera um PDF mínimo válido para testes."""
+        """Generate a minimal valid PDF for tests."""
         from reportlab.lib.pagesizes import A4
         from reportlab.pdfgen.canvas import Canvas
 
@@ -58,7 +58,7 @@ def mock_processor(sample_document):
 
 @pytest.fixture
 def client(mock_processor):
-    """TestClient do FastAPI com processor mockado."""
+    """FastAPI TestClient with mocked processor."""
     from app.main import create_app
 
     app = create_app()
@@ -66,20 +66,20 @@ def client(mock_processor):
     from fastapi.testclient import TestClient
 
     with TestClient(app) as tc:
-        # Sobrescreve APÓS o lifespan inicializar (senão lifespan overrides)
+        # Override AFTER lifespan initializes (otherwise lifespan overrides)
         app.state.processor = mock_processor
         yield tc
 
 
 @pytest.fixture
 def pdf_bytes(sample_pdf_path):
-    """Bytes de um PDF válido para upload."""
+    """Bytes of a valid PDF for upload."""
     return sample_pdf_path.read_bytes()
 
 
 @pytest.fixture
 def pdf_upload(pdf_bytes):
-    """Tupla (filename, file_obj, content_type) para upload."""
+    """Tuple (filename, file_obj, content_type) for upload."""
     return ("test.pdf", io.BytesIO(pdf_bytes), "application/pdf")
 
 
@@ -89,7 +89,7 @@ def pdf_upload(pdf_bytes):
 
 
 class TestHealthEndpoint:
-    """GET /health retorna status do sistema."""
+    """GET /health returns system status."""
 
     def test_returns_200(self, client):
         response = client.get("/health")
@@ -120,7 +120,7 @@ class TestHealthEndpoint:
 
 
 class TestInfoEndpoint:
-    """GET /info retorna configuração atual do pipeline."""
+    """GET /info returns current pipeline configuration."""
 
     def test_returns_200(self, client):
         response = client.get("/info")
@@ -143,7 +143,7 @@ class TestInfoEndpoint:
 
 
 class TestProcessJsonEndpoint:
-    """POST /process com response_format=json (default)."""
+    """POST /process with response_format=json (default)."""
 
     def test_returns_200_with_valid_pdf(self, client, pdf_upload):
         response = client.post(
@@ -170,7 +170,7 @@ class TestProcessJsonEndpoint:
         assert data["processing_time_seconds"] >= 0
 
     def test_explicit_json_format(self, client, pdf_upload):
-        """response_format=json explícito deve funcionar igual ao default."""
+        """Explicit response_format=json should work the same as default."""
         response = client.post(
             "/process",
             files={"file": pdf_upload},
@@ -186,7 +186,7 @@ class TestProcessJsonEndpoint:
 
 
 class TestProcessPdfEndpoint:
-    """POST /process?response_format=pdf retorna PDF pesquisável."""
+    """POST /process?response_format=pdf returns searchable PDF."""
 
     def test_returns_200_with_pdf_format(self, client, pdf_upload):
         response = client.post(
@@ -228,7 +228,7 @@ class TestProcessPdfEndpoint:
 
 
 class TestProcessErrors:
-    """Tratamento de erros no POST /process."""
+    """Error handling in POST /process."""
 
     def test_no_file_returns_422(self, client):
         response = client.post("/process")
@@ -259,7 +259,7 @@ class TestProcessErrors:
 
 
 class TestProcessRequestParams:
-    """Parâmetros de request são repassados ao processor."""
+    """Request parameters are passed to the processor."""
 
     def test_extract_tables_false(self, client, pdf_upload, mock_processor):
         client.post(
@@ -269,7 +269,7 @@ class TestProcessRequestParams:
         )
         call_kwargs = mock_processor.process_document_parallel.call_args
         assert call_kwargs is not None
-        # extract_tables deve ser False
+        # extract_tables should be False
         _, kwargs = call_kwargs
         assert kwargs.get("extract_tables") is False
 
@@ -280,7 +280,7 @@ class TestProcessRequestParams:
         assert kwargs.get("extract_tables") is True
 
     def test_min_confidence_passed(self, client, pdf_upload):
-        """min_confidence deve ser incluído na resposta JSON."""
+        """min_confidence should be included in the JSON response."""
         response = client.post(
             "/process",
             files={"file": pdf_upload},

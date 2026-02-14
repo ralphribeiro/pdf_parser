@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Script para processar um único PDF
-Uso: python scripts/process_single.py <caminho_do_pdf>
+Script to process a single PDF.
+Usage: python scripts/process_single.py <pdf_path>
 """
 import gc
 import logging
@@ -9,7 +9,7 @@ import sys
 import argparse
 from pathlib import Path
 
-# Adiciona diretório raiz ao path
+# Add root directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import config
@@ -20,49 +20,49 @@ logger = logging.getLogger(__name__)
 
 def _build_parser() -> argparse.ArgumentParser:
     """
-    Constrói o parser de argumentos do CLI.
+    Build the CLI argument parser.
 
-    Separado de main() para permitir testes unitários do argparse.
+    Separated from main() to allow unit testing of argparse.
     """
     parser = argparse.ArgumentParser(
-        description="Processa um PDF e extrai conteúdo em formato JSON"
+        description="Process a PDF and extract content in JSON format"
     )
 
-    parser.add_argument("pdf_path", help="Caminho para o arquivo PDF")
+    parser.add_argument("pdf_path", help="Path to the PDF file")
 
     parser.add_argument(
         "-o",
         "--output",
         default=None,
-        help=f"Diretório de saída (padrão: {config.OUTPUT_DIR})",
+        help=f"Output directory (default: {config.OUTPUT_DIR})",
     )
 
     parser.add_argument(
-        "--no-tables", action="store_true", help="Não extrair tabelas"
+        "--no-tables", action="store_true", help="Do not extract tables"
     )
 
     parser.add_argument(
-        "--no-gpu", action="store_true", help="Não usar GPU (forçar CPU)"
+        "--no-gpu", action="store_true", help="Do not use GPU (force CPU)"
     )
 
     parser.add_argument(
-        "--quiet", action="store_true", help="Modo silencioso (sem logs)"
+        "--quiet", action="store_true", help="Quiet mode (no logs)"
     )
 
-    # Flag para gerar PDF pesquisável
+    # Flag to generate searchable PDF
     pdf_group = parser.add_mutually_exclusive_group()
     pdf_group.add_argument(
         "--pdf",
         action="store_true",
         default=None,
         dest="pdf",
-        help="Gerar PDF pesquisável (com texto invisível)",
+        help="Generate searchable PDF (with invisible text)",
     )
     pdf_group.add_argument(
         "--no-pdf",
         action="store_false",
         dest="pdf",
-        help="Não gerar PDF pesquisável",
+        help="Do not generate searchable PDF",
     )
 
     return parser
@@ -72,24 +72,24 @@ def main():
     parser = _build_parser()
     args = parser.parse_args()
 
-    # Configura verbosidade
+    # Configure verbosity
     if args.quiet:
         config.VERBOSE = False
 
-    # Configura logging
+    # Configure logging
     config.setup_logging()
 
-    # Verifica se arquivo existe
+    # Check if file exists
     pdf_path = Path(args.pdf_path)
     if not pdf_path.exists():
-        logger.error("Arquivo não encontrado: %s", pdf_path)
+        logger.error("File not found: %s", pdf_path)
         sys.exit(1)
 
     if not pdf_path.suffix.lower() == ".pdf":
-        logger.error("Arquivo não é um PDF: %s", pdf_path)
+        logger.error("File is not a PDF: %s", pdf_path)
         sys.exit(1)
 
-    # Processa PDF
+    # Process PDF
     try:
         document = process_pdf(
             str(pdf_path),
@@ -100,20 +100,20 @@ def main():
         )
 
         logger.info(
-            "Processamento concluído: doc=%s, páginas=%d, blocos=%d",
+            "Processing completed: doc=%s, pages=%d, blocks=%d",
             document.doc_id,
             document.total_pages,
             sum(len(p.blocks) for p in document.pages),
         )
 
-        # Limpa referências para evitar warning do Poppler/pdf2image
+        # Clean references to avoid Poppler/pdf2image warnings
         del document
         gc.collect()
 
         return 0
 
     except Exception as e:
-        logger.error("Erro ao processar PDF: %s", e, exc_info=config.VERBOSE)
+        logger.error("Error processing PDF: %s", e, exc_info=config.VERBOSE)
         return 1
 
     finally:

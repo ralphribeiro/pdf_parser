@@ -1,9 +1,9 @@
 """
-Testes TDD para config.py refatorado com python-dotenv.
+TDD tests for config.py refactored with python-dotenv.
 
-Escritos ANTES da implementação para guiar o desenvolvimento.
-Cada teste valida que config.py lê variáveis de ambiente com prefixo
-DOC_PARSER_ e mantém backward-compat com a interface de módulo.
+Written BEFORE implementation to guide development.
+Each test validates that config.py reads environment variables with
+DOC_PARSER_ prefix and maintains backward compat with the module interface.
 """
 import sys
 from pathlib import Path
@@ -14,11 +14,11 @@ import pytest
 
 def _reload_config():
     """
-    Recarrega o módulo config para aplicar novas env vars.
+    Reload the config module to apply new env vars.
 
-    Necessário porque Python cacheia módulos em sys.modules.
-    Mock de load_dotenv impede que o arquivo .env local
-    interfira nos testes (só env vars explícitas contam).
+    Necessary because Python caches modules in sys.modules.
+    Mock of load_dotenv prevents the local .env file
+    from interfering with tests (only explicit env vars count).
     """
     if "config" in sys.modules:
         del sys.modules["config"]
@@ -32,12 +32,12 @@ def _reload_config():
 
 
 # =========================================================================
-# Defaults (sem env vars definidas)
+# Defaults (no env vars set)
 # =========================================================================
 
 
 class TestConfigDefaults:
-    """Valores default quando nenhuma DOC_PARSER_* env var está definida."""
+    """Default values when no DOC_PARSER_* env var is set."""
 
     def test_use_gpu_is_bool(self, monkeypatch):
         monkeypatch.delenv("DOC_PARSER_USE_GPU", raising=False)
@@ -130,7 +130,7 @@ class TestConfigDefaults:
 
 
 class TestConfigEnvOverrides:
-    """Cada DOC_PARSER_* env var sobrescreve o default correspondente."""
+    """Each DOC_PARSER_* env var overrides the corresponding default."""
 
     def test_ocr_engine_from_env(self, monkeypatch):
         monkeypatch.setenv("DOC_PARSER_OCR_ENGINE", "tesseract")
@@ -215,7 +215,7 @@ class TestConfigEnvOverrides:
 
 
 class TestConfigBoolParsing:
-    """Valores truthy/falsy aceitos para env vars booleanas."""
+    """Truthy/falsy values accepted for boolean env vars."""
 
     @pytest.mark.parametrize("value", ["true", "True", "TRUE", "1", "yes", "Yes"])
     def test_truthy_values(self, monkeypatch, value):
@@ -236,43 +236,43 @@ class TestConfigBoolParsing:
 
 
 class TestConfigBackwardCompat:
-    """Todas as variáveis de módulo originais devem continuar existindo."""
+    """All original module variables should continue to exist."""
 
     def test_all_expected_attributes_exist(self, monkeypatch):
         monkeypatch.setenv("DOC_PARSER_USE_GPU", "false")
         config = _reload_config()
 
         expected = [
-            # Diretórios
+            # Directories
             "BASE_DIR", "RESOURCE_DIR", "OUTPUT_DIR",
             # Device
             "DEVICE", "USE_GPU",
-            # OCR geral
+            # OCR general
             "OCR_ENGINE", "OCR_DPI", "IMAGE_DPI", "MIN_CONFIDENCE",
             "OCR_BATCH_SIZE",
-            # OCR orientação
+            # OCR orientation
             "ASSUME_STRAIGHT_PAGES", "DETECT_ORIENTATION", "STRAIGHTEN_PAGES",
             # OCR tesseract
             "OCR_LANG", "TESSERACT_CONFIG",
-            # OCR pós-processamento
+            # OCR post-processing
             "OCR_POSTPROCESS", "OCR_FIX_ERRORS", "OCR_MIN_LINE_LENGTH",
-            # Pré-processamento (legado)
+            # Preprocessing (legacy)
             "OCR_PREPROCESS", "BINARIZATION_METHOD", "DENOISE_KERNEL_SIZE",
             "DESKEW_ANGLE_THRESHOLD",
-            # Tabelas
+            # Tables
             "TABLE_DETECTION_CONFIDENCE", "CAMELOT_FLAVOR",
-            # Detecção de página
+            # Page detection
             "IMAGE_AREA_THRESHOLD", "TEXT_COVERAGE_THRESHOLD",
-            # PDF pesquisável
+            # Searchable PDF
             "SEARCHABLE_PDF",
-            # Paralelização
+            # Parallelization
             "PARALLEL_ENABLED", "PARALLEL_WORKERS", "PARALLEL_MIN_PAGES",
             # Debug
             "SAVE_PREPROCESSED_IMAGES", "VERBOSE",
         ]
 
         for attr in expected:
-            assert hasattr(config, attr), f"config.{attr} deve existir"
+            assert hasattr(config, attr), f"config.{attr} should exist"
 
     def test_base_dir_is_project_root(self, monkeypatch):
         monkeypatch.setenv("DOC_PARSER_USE_GPU", "false")
@@ -286,7 +286,7 @@ class TestConfigBackwardCompat:
         assert config.RESOURCE_DIR == config.BASE_DIR / "resource"
 
     def test_image_dpi_equals_ocr_dpi(self, monkeypatch):
-        """IMAGE_DPI deve ser alias de OCR_DPI."""
+        """IMAGE_DPI should be an alias for OCR_DPI."""
         monkeypatch.setenv("DOC_PARSER_OCR_DPI", "200")
         config = _reload_config()
         assert config.IMAGE_DPI == config.OCR_DPI == 200

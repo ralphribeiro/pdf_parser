@@ -1,17 +1,17 @@
-# Document Parser Pipeline (otimizado para ROCm)
+# Document Parser Pipeline (optimized for ROCm)
 
-Pipeline local para extração de texto e estrutura de PDFs mistos (digitais e escaneados), com saída em formato JSON. Otimizado para ROCm.
+Local pipeline for text and structure extraction from mixed PDFs (digital and scanned), with JSON output. Optimized for ROCm.
 
-## Características
+## Features
 
-- ✅ **PDFs Digitais**: Extração direta de texto com `pdfplumber`
-- ✅ **PDFs Escaneados**: OCR com `docTR` (PyTorch + ROCm/CUDA)
-- ✅ **Tabelas**: Detecção e extração com `camelot-py`
-- ✅ **Pré-processamento**: Deskew, binarização, melhoria de contraste
-- ✅ **Posicionamento**: Coordenadas normalizadas (0-1) para cada bloco
-- ✅ **Estruturação**: Blocos organizados por tipo (parágrafo, tabela, etc)
+- ✅ **Digital PDFs**: Direct text extraction with `pdfplumber`
+- ✅ **Scanned PDFs**: OCR with `docTR` (PyTorch + ROCm/CUDA)
+- ✅ **Tables**: Detection and extraction with `camelot-py`
+- ✅ **Preprocessing**: Deskew, binarization, contrast enhancement
+- ✅ **Positioning**: Normalized coordinates (0-1) for each block
+- ✅ **Structuring**: Blocks organized by type (paragraph, table, etc.)
 
-## Estrutura de Saída JSON
+## JSON Output Structure
 
 ```json
 {
@@ -27,7 +27,7 @@ Pipeline local para extração de texto e estrutura de PDFs mistos (digitais e e
         {
           "block_id": "p1_b1",
           "type": "paragraph",
-          "text": "Conteúdo do parágrafo...",
+          "text": "Paragraph content...",
           "bbox": [0.1, 0.2, 0.9, 0.3],
           "confidence": 1.0
         }
@@ -37,28 +37,28 @@ Pipeline local para extração de texto e estrutura de PDFs mistos (digitais e e
 }
 ```
 
-### Tipos de Blocos
+### Block Types
 
-- `paragraph`: Parágrafos de texto
-- `table`: Tabelas (inclui campo `rows` com dados)
-- `header`: Cabeçalhos
-- `footer`: Rodapés
-- `list`: Listas
-- `image`: Imagens (placeholder para implementação futura)
+- `paragraph`: Text paragraphs
+- `table`: Tables (includes `rows` field with data)
+- `header`: Headers
+- `footer`: Footers
+- `list`: Lists
+- `image`: Images (placeholder for future implementation)
 
-### Coordenadas BBox
+### BBox Coordinates
 
-Todas as coordenadas são normalizadas (0-1) no formato `[x1, y1, x2, y2]`:
-- `x1, y1`: Canto superior esquerdo
-- `x2, y2`: Canto inferior direito
+All coordinates are normalized (0-1) in the format `[x1, y1, x2, y2]`:
+- `x1, y1`: Top-left corner
+- `x2, y2`: Bottom-right corner
 
-## Instalação
+## Installation
 
-### Pré-requisitos
+### Prerequisites
 
 - Python 3.10+
-- PyTorch com suporte ROCm (GPU AMD) ou CUDA (GPU NVIDIA)
-- Ghostscript (para camelot)
+- PyTorch with ROCm support (AMD GPU) or CUDA (NVIDIA GPU)
+- Ghostscript (for camelot)
 
 ```bash
 # Ubuntu/Debian
@@ -68,145 +68,145 @@ sudo apt-get install ghostscript poppler-utils
 brew install ghostscript poppler
 ```
 
-### Dependências Python
+### Python Dependencies
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Linux/macOS
-# ou
+# or
 .venv\Scripts\activate  # Windows
 
 pip install -r requirements.txt
 ```
 
-## Uso
+## Usage
 
-### Processar um PDF
-
-```bash
-python scripts/process_single.py resource/documento.pdf
-```
-
-### Opções
+### Process a PDF
 
 ```bash
-# Especificar diretório de saída
-python scripts/process_single.py documento.pdf -o /caminho/saida
-
-# Desativar extração de tabelas
-python scripts/process_single.py documento.pdf --no-tables
-
-# Forçar uso de CPU (sem GPU)
-python scripts/process_single.py documento.pdf --no-gpu
-
-# Modo silencioso
-python scripts/process_single.py documento.pdf --quiet
+python scripts/process_single.py resource/document.pdf
 ```
 
-### Uso Programático
+### Options
+
+```bash
+# Specify output directory
+python scripts/process_single.py document.pdf -o /path/to/output
+
+# Disable table extraction
+python scripts/process_single.py document.pdf --no-tables
+
+# Force CPU usage (no GPU)
+python scripts/process_single.py document.pdf --no-gpu
+
+# Quiet mode
+python scripts/process_single.py document.pdf --quiet
+```
+
+### Programmatic Usage
 
 ```python
 from src.pipeline import process_pdf
 
-# Processa PDF e salva JSON
+# Process PDF and save JSON
 document = process_pdf(
-    'caminho/para/documento.pdf',
+    'path/to/document.pdf',
     output_dir='output',
     extract_tables=True,
     use_gpu=True
 )
 
-# Acessa dados do documento
-print(f"Total de páginas: {document.total_pages}")
-print(f"Total de blocos: {sum(len(p.blocks) for p in document.pages)}")
+# Access document data
+print(f"Total pages: {document.total_pages}")
+print(f"Total blocks: {sum(len(p.blocks) for p in document.pages)}")
 
-# Salva JSON customizado
+# Save custom JSON
 from src.pipeline import DocumentProcessor
 
 processor = DocumentProcessor(use_gpu=True)
-doc = processor.process_document('documento.pdf')
-processor.save_to_json(doc, 'saida.json', indent=4)
+doc = processor.process_document('document.pdf')
+processor.save_to_json(doc, 'output.json', indent=4)
 ```
 
-## Configuração
+## Configuration
 
-Edite `config.py` para ajustar parâmetros:
+Edit `config.py` to adjust parameters:
 
 ```python
 # GPU / Device
-DEVICE = 'cuda'  # ou 'cpu'
-OCR_BATCH_SIZE = 4  # Ajustar conforme VRAM
+DEVICE = 'cuda'  # or 'cpu'
+OCR_BATCH_SIZE = 4  # Adjust according to VRAM
 
 # OCR
-IMAGE_DPI = 300  # Resolução para OCR
-MIN_CONFIDENCE = 0.5  # Confiança mínima para aceitar resultado
+IMAGE_DPI = 300  # Resolution for OCR
+MIN_CONFIDENCE = 0.5  # Minimum confidence to accept result
 
-# Pré-processamento
-BINARIZATION_METHOD = 'adaptive'  # ou 'otsu'
-DESKEW_ANGLE_THRESHOLD = 0.5  # graus
+# Preprocessing
+BINARIZATION_METHOD = 'adaptive'  # or 'otsu'
+DESKEW_ANGLE_THRESHOLD = 0.5  # degrees
 
-# Tabelas
+# Tables
 TABLE_DETECTION_CONFIDENCE = 0.7
-CAMELOT_FLAVOR = 'lattice'  # ou 'stream'
+CAMELOT_FLAVOR = 'lattice'  # or 'stream'
 ```
 
 ## Performance
 
-Testado com PDF de 353 páginas (27 MB):
-- **Tempo**: ~5.5 minutos (CPU AMD Ryzen)
-- **GPU**: Suporta AMD RX 7900 XT via ROCm
-- **Velocidade média**: ~1.2 páginas/segundo
-- **Saída JSON**: 754 KB (591 blocos, 27 tabelas)
+Tested with a 353-page PDF (27 MB):
+- **Time**: ~5.5 minutes (AMD Ryzen CPU)
+- **GPU**: Supports AMD RX 7900 XT via ROCm
+- **Average speed**: ~1.2 pages/second
+- **JSON output**: 754 KB (591 blocks, 27 tables)
 
-## Arquitetura
+## Architecture
 
 ```
 src/
-├── pipeline.py              # Orquestrador principal
-├── detector.py              # Detecta tipo de página (digital/scan)
+├── pipeline.py              # Main orchestrator
+├── detector.py              # Detects page type (digital/scan)
 ├── extractors/
-│   ├── digital.py          # Extração de PDF digital
-│   ├── ocr.py              # OCR com docTR
-│   └── tables.py           # Extração de tabelas
+│   ├── digital.py          # Digital PDF extraction
+│   ├── ocr.py              # OCR with docTR
+│   └── tables.py           # Table extraction
 ├── preprocessing/
-│   └── image_enhancer.py   # Pré-processamento de imagem
+│   └── image_enhancer.py   # Image preprocessing
 ├── models/
-│   └── schemas.py          # Schemas Pydantic
+│   └── schemas.py          # Pydantic schemas
 └── utils/
-    ├── bbox.py             # Funções de bounding box
-    └── text_normalizer.py # Limpeza de texto
+    ├── bbox.py             # Bounding box functions
+    └── text_normalizer.py # Text cleanup
 ```
 
-## Exemplo de Resultado
+## Example Output
 
 ```
-✅ Processamento concluído com sucesso!
-   - Documento: 1008086-69.2016.8.26.0005
-   - Páginas: 353
-   - Blocos totais: 591
-   - Tabelas detectadas: 27
+✅ Processing completed successfully!
+   - Document: 1008086-69.2016.8.26.0005
+   - Pages: 353
+   - Total blocks: 591
+   - Tables detected: 27
 
-✓ JSON salvo em: output/1008086-69.2016.8.26.0005.json
-  Tamanho: 753.6 KB
+✓ JSON saved to: output/1008086-69.2016.8.26.0005.json
+  Size: 753.6 KB
 ```
 
-## Limitações Atuais
+## Current Limitations
 
-- ✅ Extração de texto e tabelas
-- ✅ Posicionamento aproximado (bbox normalizado)
-- ⏳ Assinaturas: tratamento futuro
-- ⏳ Detecção de layout avançado (colunas, seções)
-- ⏳ Reconhecimento de formulários
+- ✅ Text and table extraction
+- ✅ Approximate positioning (normalized bbox)
+- ⏳ Signatures: future handling
+- ⏳ Advanced layout detection (columns, sections)
+- ⏳ Form recognition
 
 ## Roadmap
 
-1. ✅ Pipeline básico funcional
-2. ⏳ Melhoria de detecção de tabelas em PDFs escaneados
-3. ⏳ Detecção e classificação de assinaturas
-4. ⏳ Chunking inteligente para embeddings
-5. ⏳ Pipeline de vetorização (embeddings)
-6. ⏳ Processamento batch de múltiplos PDFs
+1. ✅ Basic functional pipeline
+2. ⏳ Improved table detection in scanned PDFs
+3. ⏳ Signature detection and classification
+4. ⏳ Smart chunking for embeddings
+5. ⏳ Vectorization pipeline (embeddings)
+6. ⏳ Batch processing of multiple PDFs
 
-## Licença
+## License
 
-Projeto interno para uso em análise de documentos jurídicos.
+Internal project for legal document analysis.

@@ -1,5 +1,5 @@
 """
-Módulos de pré-processamento de imagens
+Image preprocessing modules
 """
 from .image_enhancer import (
     preprocess_image,

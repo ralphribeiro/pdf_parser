@@ -1,10 +1,10 @@
 """
-Router principal da API de processamento de documentos.
+Main API router for document processing.
 
 Endpoints:
-    POST /process  - Processa um PDF e retorna JSON ou PDF pesquisável
-    GET  /health   - Healthcheck do serviço
-    GET  /info     - Configuração atual do pipeline
+    POST /process  - Process a PDF and return JSON or searchable PDF
+    GET  /health   - Service healthcheck
+    GET  /info     - Current pipeline configuration
 """
 import asyncio
 import gc
@@ -49,56 +49,56 @@ class ResponseFormat(str, Enum):
 
 @router.post(
     "/process",
-    summary="Processar documento PDF",
+    summary="Process PDF document",
     responses={
-        400: {"model": ErrorResponse, "description": "Arquivo inválido"},
-        422: {"description": "Parâmetros inválidos"},
+        400: {"model": ErrorResponse, "description": "Invalid file"},
+        422: {"description": "Invalid parameters"},
     },
 )
 async def process_document(
-    file: UploadFile = File(..., description="Arquivo PDF para processar"),
+    file: UploadFile = File(..., description="PDF file to process"),
     response_format: ResponseFormat = Query(
         ResponseFormat.JSON,
-        description="Formato da resposta: json ou pdf",
+        description="Response format: json or pdf",
     ),
-    extract_tables: bool = Query(True, description="Extrair tabelas do PDF"),
+    extract_tables: bool = Query(True, description="Extract tables from PDF"),
     min_confidence: Optional[float] = Query(
-        None, ge=0.0, le=1.0, description="Confiança mínima OCR (sobrescreve config)"
+        None, ge=0.0, le=1.0, description="Minimum OCR confidence (overrides config)"
     ),
     ocr_postprocess: Optional[bool] = Query(
-        None, description="Pós-processamento OCR (sobrescreve config)"
+        None, description="OCR post-processing (overrides config)"
     ),
     ocr_fix_errors: Optional[bool] = Query(
-        None, description="Corrigir erros comuns OCR (sobrescreve config)"
+        None, description="Fix common OCR errors (overrides config)"
     ),
     processor=Depends(get_processor),
     semaphore: asyncio.Semaphore = Depends(get_semaphore),
 ):
     """
-    Recebe um PDF via upload, processa com OCR/extração digital
-    e retorna o resultado em JSON ou como PDF pesquisável.
+    Receives a PDF via upload, processes it with OCR/digital extraction
+    and returns the result as JSON or as a searchable PDF.
     """
-    # 1. Validar arquivo
+    # 1. Validate file
     if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Arquivo deve ser um PDF")
+        raise HTTPException(status_code=400, detail="File must be a PDF")
 
     content = await file.read()
 
     if not content or content[:5] != b"%PDF-":
         raise HTTPException(
-            status_code=400, detail="Arquivo não é um PDF válido"
+            status_code=400, detail="File is not a valid PDF"
         )
 
-    # 2. Salvar em arquivo temporário
+    # 2. Save to temporary file
     tmp_path = None
     tmp_output_dir = None
     try:
         tmp_dir = tempfile.mkdtemp(prefix="doc_parser_")
         tmp_path = Path(tmp_dir) / file.filename
         tmp_path.write_bytes(content)
-        del content  # libera memória
+        del content  # free memory
 
-        # 3. Aplicar overrides de config para este request
+        # 3. Apply config overrides for this request
         original_confidence = config.MIN_CONFIDENCE
         original_postprocess = config.OCR_POSTPROCESS
         original_fix_errors = config.OCR_FIX_ERRORS
@@ -110,7 +110,7 @@ async def process_document(
         if ocr_fix_errors is not None:
             config.OCR_FIX_ERRORS = ocr_fix_errors
 
-        # 4. Processar com semáforo (serializa acesso à GPU)
+        # 4. Process with semaphore (serializes GPU access)
         start_time = time.monotonic()
 
         try:
@@ -125,14 +125,14 @@ async def process_document(
                     ),
                 )
         finally:
-            # Restaura config original
+            # Restore original config
             config.MIN_CONFIDENCE = original_confidence
             config.OCR_POSTPROCESS = original_postprocess
             config.OCR_FIX_ERRORS = original_fix_errors
 
         elapsed = time.monotonic() - start_time
 
-        # 5. Retornar resultado
+        # 5. Return result
         if response_format == ResponseFormat.JSON:
             result = document.to_json_dict()
             result["processing_time_seconds"] = round(elapsed, 3)
@@ -151,9 +151,9 @@ async def process_document(
 
         filename = f"{document.doc_id}_searchable.pdf"
 
-        # Limpa input temp agora; output temp limpa APÓS response ser enviada
+        # Clean input temp now; output temp cleaned AFTER response is sent
         _cleanup_dir(tmp_path.parent)
-        tmp_path = None  # Evita dupla limpeza no finally
+        tmp_path = None  # Avoid double cleanup in finally
 
         return FileResponse(
             path=str(pdf_output),
@@ -165,7 +165,7 @@ async def process_document(
         )
 
     finally:
-        # Limpa arquivos temporários (JSON path; PDF limpa via BackgroundTask)
+        # Clean temporary files (JSON path; PDF cleaned via BackgroundTask)
         if tmp_path and tmp_path.exists():
             _cleanup_dir(tmp_path.parent)
         gc.collect()
@@ -179,10 +179,10 @@ async def process_document(
 @router.get(
     "/health",
     response_model=HealthResponse,
-    summary="Healthcheck do serviço",
+    summary="Service healthcheck",
 )
 async def health(processor=Depends(get_processor)):
-    """Retorna status do serviço, GPU e engine OCR carregado."""
+    """Returns service status, GPU and loaded OCR engine."""
     return HealthResponse(
         status="ok",
         gpu_available=processor.use_gpu,
@@ -199,10 +199,10 @@ async def health(processor=Depends(get_processor)):
 @router.get(
     "/info",
     response_model=InfoResponse,
-    summary="Configuração atual do pipeline",
+    summary="Current pipeline configuration",
 )
 async def info():
-    """Retorna a configuração atual (somente leitura)."""
+    """Returns the current configuration (read-only)."""
     return InfoResponse(
         ocr_engine=config.OCR_ENGINE,
         ocr_dpi=config.OCR_DPI,
@@ -222,12 +222,12 @@ async def info():
 
 
 # ---------------------------------------------------------------------------
-# Utilitários
+# Utilities
 # ---------------------------------------------------------------------------
 
 
 def _cleanup_dir(path: Path):
-    """Remove diretório temporário e seu conteúdo."""
+    """Remove temporary directory and its contents."""
     import shutil
 
     try:
