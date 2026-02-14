@@ -60,10 +60,13 @@ python -m venv .venv
 source .venv/bin/activate
 
 # Install PyTorch with ROCm support (skip if using Docker)
-pip install -r requirements-torch.txt
+pip install --index-url https://download.pytorch.org/whl/rocm7.0 ".[torch-rocm]"
 
 # Install project dependencies
-pip install -r requirements.txt
+pip install .
+
+# Install with dev tools (linting, testing)
+pip install ".[dev]"
 ```
 
 ## Usage
@@ -249,10 +252,9 @@ doc_parser/
 │   ├── test_config.py            # Configuration tests
 │   └── test_searchable_pdf.py    # Searchable PDF tests
 ├── config.py                     # Global configuration
+├── pyproject.toml                # Dependencies, build config, tool settings
 ├── Dockerfile                    # Docker image (ROCm)
-├── docker-compose.yml            # Docker Compose setup
-├── requirements.txt              # Python dependencies
-└── requirements-torch.txt        # PyTorch + ROCm dependencies
+└── docker-compose.yml            # Docker Compose setup
 ```
 
 ## Testing

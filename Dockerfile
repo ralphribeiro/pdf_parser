@@ -25,8 +25,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies (torch is already in the base image — do NOT reinstall)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Deps are declared in pyproject.toml [project.dependencies]; extracted here
+# to preserve Docker layer caching (this layer rebuilds only when deps change).
+COPY pyproject.toml .
+RUN python3 -c "\
+import tomllib, subprocess, sys; \
+deps = tomllib.load(open('pyproject.toml', 'rb'))['project']['dependencies']; \
+subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir'] + deps)"
 
 # Application code
 COPY config.py .

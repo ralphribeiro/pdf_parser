@@ -1,3 +1,0 @@
---index-url https://download.pytorch.org/whl/rocm7.0
-torch>=2.0.0                # PyTorch with ROCm support
-torchvision>=0.25.0         # TorchVision with ROCm support

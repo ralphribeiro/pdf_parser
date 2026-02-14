@@ -1,7 +1,82 @@
+# =============================================================================
+# Build system
+# =============================================================================
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+# =============================================================================
+# Project metadata and dependencies
+# =============================================================================
+
 [project]
 name = "doc-parser"
 version = "0.1.0"
 requires-python = ">=3.12"
+dependencies = [
+    # --- PDF and Image ---
+    "pdfplumber>=0.11.0",           # Digital text extraction + tables
+    "pypdf>=4.0.0",                 # PDF manipulation
+    "pdf2image>=1.17.0",            # Convert PDF to image
+    "Pillow>=10.0.0",               # Image processing
+
+    # --- Image Processing ---
+    "opencv-python>=4.9.0",         # Deskew, binarization, filters
+    "numpy>=1.24.0",                # Arrays and numeric operations
+    "scikit-image>=0.22.0",         # Advanced image algorithms
+
+    # --- OCR ---
+    "python-doctr>=0.8.0",          # OCR + Layout detection (PyTorch)
+    "transformers>=4.35.0",         # Hugging Face models (optional)
+    "pytesseract>=0.3.10",          # Python interface for Tesseract OCR (optional)
+
+    # --- Tables ---
+    "camelot-py[base]>=0.11.0",     # Tables from digital PDFs
+    "ghostscript",                  # camelot dependency (system ghostscript required)
+
+    # --- PDF Output ---
+    "reportlab>=4.0.0",             # PDF generation (searchable text overlay)
+
+    # --- API ---
+    "fastapi>=0.115.0",             # Async web framework
+    "uvicorn[standard]>=0.30.0",    # ASGI server
+    "python-multipart>=0.0.9",      # File upload support (FastAPI)
+
+    # --- Utilities ---
+    "pydantic>=2.5.0",              # JSON schema validation
+    "python-dotenv>=1.0.0",         # Configuration via .env
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "ruff",
+    "pylint",
+    "mypy",
+    "bandit[toml]",
+    "xenon",
+    "radon",
+    "pytest>=8.0.0",
+    "httpx>=0.27.0",
+]
+# PyTorch with ROCm support (AMD GPU).
+# PEP 621 does not support --index-url; install with:
+#   pip install --index-url https://download.pytorch.org/whl/rocm7.0 ".[torch-rocm]"
+torch-rocm = [
+    "torch>=2.0.0",
+    "torchvision>=0.25.0",
+]
+
+# =============================================================================
+# Setuptools — package discovery for non-standard layout
+# =============================================================================
+
+[tool.setuptools.packages.find]
+include = ["app*", "src*"]
+
+[tool.setuptools]
+py-modules = ["config"]
 
 # =============================================================================
 # Ruff — formatter + linter (replaces black, isort, flake8, pyupgrade)
