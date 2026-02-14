@@ -3,10 +3,11 @@
 Script to process a single PDF.
 Usage: python scripts/process_single.py <pdf_path>
 """
+
+import argparse
 import gc
 import logging
 import sys
-import argparse
 from pathlib import Path
 
 # Add root directory to path
@@ -45,9 +46,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-gpu", action="store_true", help="Do not use GPU (force CPU)"
     )
 
-    parser.add_argument(
-        "--quiet", action="store_true", help="Quiet mode (no logs)"
-    )
+    parser.add_argument("--quiet", action="store_true", help="Quiet mode (no logs)")
 
     # Flag to generate searchable PDF
     pdf_group = parser.add_mutually_exclusive_group()
@@ -85,7 +84,7 @@ def main():
         logger.error("File not found: %s", pdf_path)
         sys.exit(1)
 
-    if not pdf_path.suffix.lower() == ".pdf":
+    if pdf_path.suffix.lower() != ".pdf":
         logger.error("File is not a PDF: %s", pdf_path)
         sys.exit(1)
 

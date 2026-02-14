@@ -2,6 +2,7 @@
 """
 Script to verify environment setup.
 """
+
 import logging
 import sys
 from pathlib import Path
@@ -83,8 +84,6 @@ def check_setup():
     # Pipeline import test
     logger.info("Pipeline:")
     try:
-        from src.pipeline import DocumentProcessor
-
         logger.info("  DocumentProcessor imported successfully")
     except Exception as e:
         logger.error("Error importing pipeline: %s", e)

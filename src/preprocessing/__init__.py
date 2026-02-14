@@ -1,18 +1,19 @@
 """
 Image preprocessing modules
 """
+
 from .image_enhancer import (
-    preprocess_image,
-    deskew_image,
     binarize_image,
+    deskew_image,
+    enhance_contrast,
+    preprocess_image,
     remove_noise,
-    enhance_contrast
 )
 
 __all__ = [
-    'preprocess_image',
-    'deskew_image',
-    'binarize_image',
-    'remove_noise',
-    'enhance_contrast'
+    "binarize_image",
+    "deskew_image",
+    "enhance_contrast",
+    "preprocess_image",
+    "remove_noise",
 ]

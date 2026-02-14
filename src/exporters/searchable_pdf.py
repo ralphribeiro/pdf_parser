@@ -4,17 +4,15 @@ Searchable PDF exporter.
 Overlays invisible text (render mode 3) on top of original PDF pages,
 allowing text search and selection in scanned documents.
 """
+
 import io
 from pathlib import Path
-from typing import List, Union
 
-from reportlab.pdfgen.canvas import Canvas
-from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.pdfgen.canvas import Canvas
 
-from src.models.schemas import Page, Document
+from src.models.schemas import Document, Page
 from src.utils.bbox import denormalize_bbox
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -29,8 +27,10 @@ _MAX_FONT_SIZE = 72.0
 # Text overlay (per-page)
 # ---------------------------------------------------------------------------
 
-def _create_text_overlay(page: Page, page_width_pts: float,
-                         page_height_pts: float) -> bytes:
+
+def _create_text_overlay(
+    page: Page, page_width_pts: float, page_height_pts: float
+) -> bytes:
     """
     Generate a single-page PDF containing invisible text positioned
     according to individual line bounding boxes (when available)
@@ -52,11 +52,9 @@ def _create_text_overlay(page: Page, page_width_pts: float,
             continue
 
         if block.lines:
-            _render_block_with_lines(c, block.lines,
-                                     page_width_pts, page_height_pts)
+            _render_block_with_lines(c, block.lines, page_width_pts, page_height_pts)
         else:
-            _render_block_fallback(c, block,
-                                   page_width_pts, page_height_pts)
+            _render_block_fallback(c, block, page_width_pts, page_height_pts)
 
     c.showPage()
     c.save()
@@ -64,8 +62,13 @@ def _create_text_overlay(page: Page, page_width_pts: float,
     return buf.getvalue()
 
 
-def _render_line(canvas: Canvas, text: str, line_bbox: List[float],
-                 page_width_pts: float, page_height_pts: float) -> None:
+def _render_line(
+    canvas: Canvas,
+    text: str,
+    line_bbox: list[float],
+    page_width_pts: float,
+    page_height_pts: float,
+) -> None:
     """
     Render ONE line of invisible text on the canvas, positioned and
     scaled according to the line bbox.
@@ -90,8 +93,9 @@ def _render_line(canvas: Canvas, text: str, line_bbox: List[float],
         return
 
     # Font size derived from line HEIGHT (not width)
-    font_size = max(_MIN_FONT_SIZE,
-                    min(line_height * _FONT_SIZE_FROM_HEIGHT_FACTOR, _MAX_FONT_SIZE))
+    font_size = max(
+        _MIN_FONT_SIZE, min(line_height * _FONT_SIZE_FROM_HEIGHT_FACTOR, _MAX_FONT_SIZE)
+    )
 
     # Horizontal scale: adjust text width to fit within bbox
     natural_width = stringWidth(text, _FONT_NAME, font_size)
@@ -112,9 +116,9 @@ def _render_line(canvas: Canvas, text: str, line_bbox: List[float],
     canvas.drawText(text_obj)
 
 
-def _render_block_with_lines(canvas: Canvas, lines: List[dict],
-                              page_width_pts: float,
-                              page_height_pts: float) -> None:
+def _render_block_with_lines(
+    canvas: Canvas, lines: list[dict], page_width_pts: float, page_height_pts: float
+) -> None:
     """
     Render a block using per-line data (text + bbox).
     """
@@ -125,14 +129,14 @@ def _render_block_with_lines(canvas: Canvas, lines: List[dict],
             _render_line(canvas, text, bbox, page_width_pts, page_height_pts)
 
 
-def _render_block_fallback(canvas: Canvas, block,
-                            page_width_pts: float,
-                            page_height_pts: float) -> None:
+def _render_block_fallback(
+    canvas: Canvas, block, page_width_pts: float, page_height_pts: float
+) -> None:
     """
     Fallback for blocks without `lines` data: distributes text lines
     uniformly within the block bbox.
     """
-    text_lines = [l for l in block.text.split("\n") if l.strip()]
+    text_lines = [ln for ln in block.text.split("\n") if ln.strip()]
     if not text_lines:
         return
 
@@ -167,10 +171,14 @@ def _render_block_fallback(canvas: Canvas, block,
 # Font size calculation (legacy, used by old tests)
 # ---------------------------------------------------------------------------
 
-def _calculate_font_size(text_line: str, bbox_width_pts: float,
-                         font_name: str = "Helvetica",
-                         min_size: float = 4.0,
-                         max_size: float = 16.0) -> float:
+
+def _calculate_font_size(
+    text_line: str,
+    bbox_width_pts: float,
+    font_name: str = "Helvetica",
+    min_size: float = 4.0,
+    max_size: float = 16.0,
+) -> float:
     """
     Calculate font size so that text fits within the bbox width.
 
@@ -199,9 +207,11 @@ def _calculate_font_size(text_line: str, bbox_width_pts: float,
     return min_size
 
 
-def create_searchable_pdf(original_pdf_path: Union[str, Path],
-                          document: Document,
-                          output_path: Union[str, Path]) -> None:
+def create_searchable_pdf(
+    original_pdf_path: str | Path,
+    document: Document,
+    output_path: str | Path,
+) -> None:
     """
     Create a searchable PDF by combining the original PDF with invisible
     text overlays on OCR pages.
@@ -249,5 +259,5 @@ def create_searchable_pdf(original_pdf_path: Union[str, Path],
 
         writer.add_page(original_page)
 
-    with open(output_path, "wb") as f:
+    with Path(output_path).open("wb") as f:
         writer.write(f)

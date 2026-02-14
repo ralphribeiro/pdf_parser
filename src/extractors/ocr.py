@@ -5,16 +5,15 @@ IMPORTANT: docTR handles its own preprocessing internally.
 Passing binarized/grayscale images DEGRADES OCR quality.
 Always pass the original RGB image in high resolution.
 """
+
 import logging
-from typing import List, Optional, Tuple
 
 import numpy as np
 from pdf2image import convert_from_path
-from PIL import Image
 
 import config
 from src.models.schemas import Block, BlockType
-from src.utils.bbox import normalize_bbox, sort_blocks_by_position
+from src.utils.bbox import sort_blocks_by_position
 from src.utils.text_normalizer import normalize_text
 
 logger = logging.getLogger(__name__)
@@ -33,7 +32,8 @@ class DocTREngine:
     - DETECT_ORIENTATION=True: detects and corrects page orientation (0/90/180/270)
     - STRAIGHTEN_PAGES=True: automatically corrects skewed pages
     """
-    def __init__(self, device: str = None):
+
+    def __init__(self, device: str | None = None):
         """
         Initialize the OCR engine.
 
@@ -45,16 +45,16 @@ class DocTREngine:
         self.device = device or config.DEVICE
 
         # Page orientation settings
-        assume_straight = getattr(config, 'ASSUME_STRAIGHT_PAGES', False)
-        detect_orient = getattr(config, 'DETECT_ORIENTATION', True)
-        straighten = getattr(config, 'STRAIGHTEN_PAGES', True)
+        assume_straight = getattr(config, "ASSUME_STRAIGHT_PAGES", False)
+        detect_orient = getattr(config, "DETECT_ORIENTATION", True)
+        straighten = getattr(config, "STRAIGHTEN_PAGES", True)
 
         # Load docTR model with optimized configuration
         # det_arch: text detection architecture
         # reco_arch: text recognition architecture
         self.model = ocr_predictor(
-            det_arch='db_resnet50',
-            reco_arch='crnn_vgg16_bn',
+            det_arch="db_resnet50",
+            reco_arch="crnn_vgg16_bn",
             pretrained=True,
             assume_straight_pages=assume_straight,
             detect_orientation=detect_orient,
@@ -110,7 +110,7 @@ class DocTREngine:
         result = self.model([prepared])
         return result
 
-    def extract_from_images_batch(self, images: List[np.ndarray]) -> dict:
+    def extract_from_images_batch(self, images: list[np.ndarray]) -> dict:
         """
         Extract text from multiple images in batch.
 
@@ -139,9 +139,12 @@ class DocTREngine:
 OCREngine = DocTREngine
 
 
-def extract_ocr_page(pdf_path: str, page_number: int,
-                    preprocess: bool = False,  # DISABLED by default - degrades quality
-                    ocr_engine: Optional[DocTREngine] = None) -> Tuple[List[Block], float, float]:
+def extract_ocr_page(
+    pdf_path: str,
+    page_number: int,
+    preprocess: bool = False,  # DISABLED by default - degrades quality
+    ocr_engine: DocTREngine | None = None,
+) -> tuple[list[Block], float, float]:
     """
     Extract content from a page using OCR.
 
@@ -156,13 +159,10 @@ def extract_ocr_page(pdf_path: str, page_number: int,
     """
     # Convert page to high-resolution image
     # High DPI is crucial for OCR quality
-    dpi = getattr(config, 'OCR_DPI', config.IMAGE_DPI)
+    dpi = getattr(config, "OCR_DPI", config.IMAGE_DPI)
 
     images = convert_from_path(
-        pdf_path,
-        first_page=page_number,
-        last_page=page_number,
-        dpi=dpi
+        pdf_path, first_page=page_number, last_page=page_number, dpi=dpi
     )
 
     if not images:
@@ -201,8 +201,9 @@ def extract_ocr_page(pdf_path: str, page_number: int,
     return blocks, page_width, page_height
 
 
-def _parse_doctr_result(result, page_number: int, page_width: float,
-                       page_height: float) -> List[Block]:
+def _parse_doctr_result(
+    result, page_number: int, page_width: float, page_height: float
+) -> list[Block]:
     """
     Parse docTR result and convert to blocks.
     """
@@ -232,12 +233,14 @@ def _parse_doctr_result(result, page_number: int, page_width: float,
                 # Line bbox (docTR returns normalized coordinates)
                 line_bbox = line.geometry
                 # line_bbox is ((x1, y1), (x2, y2)) normalized
-                all_line_bboxes.append([
-                    line_bbox[0][0],  # x1
-                    line_bbox[0][1],  # y1
-                    line_bbox[1][0],  # x2
-                    line_bbox[1][1]   # y2
-                ])
+                all_line_bboxes.append(
+                    [
+                        line_bbox[0][0],  # x1
+                        line_bbox[0][1],  # y1
+                        line_bbox[1][0],  # x2
+                        line_bbox[1][1],  # y2
+                    ]
+                )
 
             if not block_text:
                 continue
@@ -255,7 +258,7 @@ def _parse_doctr_result(result, page_number: int, page_width: float,
                     min(b[0] for b in all_line_bboxes),
                     min(b[1] for b in all_line_bboxes),
                     max(b[2] for b in all_line_bboxes),
-                    max(b[3] for b in all_line_bboxes)
+                    max(b[3] for b in all_line_bboxes),
                 ]
             else:
                 bbox = [0.0, 0.0, 1.0, 1.0]
@@ -270,7 +273,9 @@ def _parse_doctr_result(result, page_number: int, page_width: float,
             # Preserve per-line data (text + bbox) for precise overlay
             lines_data = [
                 {"text": line_text, "bbox": line_bbox}
-                for line_text, line_bbox in zip(block_text, all_line_bboxes)
+                for line_text, line_bbox in zip(
+                    block_text, all_line_bboxes, strict=False
+                )
             ]
 
             block = Block(
@@ -279,7 +284,7 @@ def _parse_doctr_result(result, page_number: int, page_width: float,
                 text=text,
                 bbox=bbox,
                 confidence=confidence,
-                lines=lines_data
+                lines=lines_data,
             )
 
             blocks.append(block)

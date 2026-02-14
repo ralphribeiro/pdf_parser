@@ -4,11 +4,10 @@ Pydantic schemas for API request/response.
 Separated from pipeline schemas (src/models/schemas.py) to keep
 the HTTP layer decoupled from business logic.
 """
+
 from dataclasses import dataclass
-from typing import Optional
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Request
@@ -24,9 +23,9 @@ class ProcessingOptions:
     """
 
     extract_tables: bool = True
-    min_confidence: Optional[float] = None
-    ocr_postprocess: Optional[bool] = None
-    ocr_fix_errors: Optional[bool] = None
+    min_confidence: float | None = None
+    ocr_postprocess: bool | None = None
+    ocr_fix_errors: bool | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +55,7 @@ class InfoResponse(BaseModel):
     assume_straight_pages: bool
     detect_orientation: bool
     parallel_enabled: bool
-    parallel_workers: Optional[int]
+    parallel_workers: int | None
     searchable_pdf: bool
     device: str
     use_gpu: bool

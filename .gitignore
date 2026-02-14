@@ -43,5 +43,11 @@ Thumbs.db
 # docTR models cache
 .cache/doctr/
 
+# Mypy
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
 # Environment
 .env

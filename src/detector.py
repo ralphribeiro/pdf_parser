@@ -6,12 +6,17 @@ Detects whether a page is:
 - scan: scanned image that needs OCR
 - hybrid: image with text overlay (e.g., court stamp over scanned document)
 """
+
+from typing import Literal
+
 import pdfplumber
-from typing import Literal, Tuple
+
 import config
 
 
-def detect_page_type(pdf_path: str, page_number: int) -> Literal["digital", "scan", "hybrid"]:
+def detect_page_type(
+    pdf_path: str, page_number: int
+) -> Literal["digital", "scan", "hybrid"]:
     """
     Detect page type using image area analysis and text coverage.
 
@@ -59,7 +64,7 @@ def detect_page_type(pdf_path: str, page_number: int) -> Literal["digital", "sca
                 return "scan"
 
 
-def _has_large_images(page) -> Tuple[bool, float]:
+def _has_large_images(page) -> tuple[bool, float]:
     """
     Check if the page has images covering significant area.
 
@@ -81,10 +86,10 @@ def _has_large_images(page) -> Tuple[bool, float]:
     total_image_area = 0
     for img in images:
         # Image coordinates
-        x0 = img.get('x0', 0)
-        x1 = img.get('x1', 0)
-        top = img.get('top', 0)
-        bottom = img.get('bottom', 0)
+        x0 = img.get("x0", 0)
+        x1 = img.get("x1", 0)
+        top = img.get("top", 0)
+        bottom = img.get("bottom", 0)
 
         width = abs(x1 - x0)
         height = abs(bottom - top)
@@ -117,10 +122,10 @@ def _get_text_coverage(page) -> float:
     # Calculate total area covered by words
     total_text_area = 0
     for w in words:
-        x0 = w.get('x0', 0)
-        x1 = w.get('x1', 0)
-        top = w.get('top', 0)
-        bottom = w.get('bottom', 0)
+        x0 = w.get("x0", 0)
+        x1 = w.get("x1", 0)
+        top = w.get("top", 0)
+        bottom = w.get("bottom", 0)
 
         width = abs(x1 - x0)
         height = abs(bottom - top)
@@ -187,13 +192,13 @@ def get_page_info(pdf_path: str, page_number: int) -> dict:
         char_count = len(text.strip()) if text else 0
 
         return {
-            'page_number': page_number,
-            'width': page.width,
-            'height': page.height,
-            'num_images': len(page.images) if page.images else 0,
-            'image_coverage': round(image_coverage * 100, 2),
-            'has_large_images': has_large_img,
-            'text_coverage': round(text_coverage * 100, 2),
-            'char_count': char_count,
-            'detected_type': detect_page_type(pdf_path, page_number)
+            "page_number": page_number,
+            "width": page.width,
+            "height": page.height,
+            "num_images": len(page.images) if page.images else 0,
+            "image_coverage": round(image_coverage * 100, 2),
+            "has_large_images": has_large_img,
+            "text_coverage": round(text_coverage * 100, 2),
+            "char_count": char_count,
+            "detected_type": detect_page_type(pdf_path, page_number),
         }

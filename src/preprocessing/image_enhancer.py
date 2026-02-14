@@ -1,14 +1,15 @@
 """
 Image preprocessing to improve OCR quality
 """
+
 import cv2
 import numpy as np
 from PIL import Image
-from typing import Tuple
+
 import config
 
 
-def preprocess_image(image: Image.Image, dpi: int = None) -> np.ndarray:
+def preprocess_image(image: Image.Image, dpi: int | None = None) -> np.ndarray:
     """
     Complete preprocessing pipeline.
 
@@ -66,7 +67,7 @@ def deskew_image(image: np.ndarray, max_angle: float = 10.0) -> np.ndarray:
 
     # Calculate average angle of detected lines
     angles = []
-    for rho, theta in lines[:, 0]:
+    for _rho, theta in lines[:, 0]:
         angle = np.degrees(theta) - 90
         if abs(angle) <= max_angle:
             angles.append(angle)
@@ -85,13 +86,14 @@ def deskew_image(image: np.ndarray, max_angle: float = 10.0) -> np.ndarray:
     (h, w) = image.shape[:2]
     center = (w // 2, h // 2)
     M = cv2.getRotationMatrix2D(center, rotation_angle, 1.0)
-    rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC,
-                            borderMode=cv2.BORDER_REPLICATE)
+    rotated = cv2.warpAffine(
+        image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
+    )
 
     return rotated
 
 
-def binarize_image(image: np.ndarray, method: str = 'adaptive') -> np.ndarray:
+def binarize_image(image: np.ndarray, method: str = "adaptive") -> np.ndarray:
     """
     Binarize image (black and white).
 
@@ -102,14 +104,13 @@ def binarize_image(image: np.ndarray, method: str = 'adaptive') -> np.ndarray:
     Returns:
         binarized image
     """
-    if method == 'otsu':
+    if method == "otsu":
         # Otsu's method: automatic
         _, binary = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    elif method == 'adaptive':
+    elif method == "adaptive":
         # Adaptive binarization: better for uneven lighting
         binary = cv2.adaptiveThreshold(
-            image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY, 11, 2
+            image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
         )
     else:
         raise ValueError(f"Unknown method: {method}")
@@ -117,7 +118,7 @@ def binarize_image(image: np.ndarray, method: str = 'adaptive') -> np.ndarray:
     return binary
 
 
-def remove_noise(image: np.ndarray, kernel_size: int = None) -> np.ndarray:
+def remove_noise(image: np.ndarray, kernel_size: int | None = None) -> np.ndarray:
     """
     Remove noise from the image.
 
@@ -170,7 +171,7 @@ def remove_borders(image: np.ndarray, border_size: int = 10) -> np.ndarray:
         image without borders
     """
     h, w = image.shape[:2]
-    return image[border_size:h-border_size, border_size:w-border_size]
+    return image[border_size : h - border_size, border_size : w - border_size]
 
 
 def resize_to_dpi(image: Image.Image, target_dpi: int = 300) -> Image.Image:
@@ -185,7 +186,7 @@ def resize_to_dpi(image: Image.Image, target_dpi: int = 300) -> Image.Image:
         resized image
     """
     # Get current DPI (if available)
-    current_dpi = image.info.get('dpi', (72, 72))[0]
+    current_dpi = image.info.get("dpi", (72, 72))[0]
 
     if current_dpi == target_dpi:
         return image

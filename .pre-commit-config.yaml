@@ -1,0 +1,76 @@
+# =============================================================================
+# Pre-commit hooks — static analysis pipeline
+#
+# Install:  pip install pre-commit && pre-commit install
+# Run all:  pre-commit run --all-files
+# Update:   pre-commit autoupdate
+# =============================================================================
+
+repos:
+  # ── General hygiene ────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+
+  # ── Ruff — formatter (replaces black) + linter (replaces isort/flake8) ─
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.1
+    hooks:
+      - id: ruff-format
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+
+  # ── Pylint — deep analysis (design, duplication, conventions) ──────────
+  - repo: https://github.com/PyCQA/pylint
+    rev: v4.0.4
+    hooks:
+      - id: pylint
+        args: [--rcfile=pyproject.toml]
+        additional_dependencies:
+          - fastapi
+          - pydantic
+          - python-dotenv
+          - python-multipart
+
+  # ── Mypy — static type checking ───────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        args: [--config-file=pyproject.toml]
+        additional_dependencies:
+          - fastapi
+          - pydantic
+          - types-requests
+
+  # ── Bandit — security scanning ─────────────────────────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: "1.9.3"
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml]
+        additional_dependencies: ["bandit[toml]"]
+
+  # ── Xenon / Radon — cyclomatic complexity ──────────────────────────────
+  - repo: local
+    hooks:
+      - id: xenon
+        name: xenon (complexity check)
+        entry: xenon
+        language: python
+        types: [python]
+        args: [
+          --max-absolute, C,
+          --max-modules, B,
+          --max-average, B,
+          --exclude, "src/pipeline.py,scripts/*",
+        ]
+        additional_dependencies: [xenon]

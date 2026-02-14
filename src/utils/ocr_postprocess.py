@@ -7,8 +7,8 @@ Functions to clean and improve OCR-extracted text:
 - Short line removal
 - Broken word merging
 """
+
 import re
-from typing import List, Set, Optional
 
 
 def clean_ocr_text(text: str) -> str:
@@ -26,31 +26,31 @@ def clean_ocr_text(text: str) -> str:
 
     # Remove common OCR noise characters
     # Keep letters, numbers, basic punctuation and accents
-    noise_chars = r'[|\\{}\[\]<>©®™°§¶†‡•◦▪▫●○◆◇★☆♦♠♣♥]'
-    text = re.sub(noise_chars, '', text)
+    noise_chars = r"[|\\{}\[\]<>©®™°§¶†‡•◦▪▫●○◆◇★☆♦♠♣♥]"
+    text = re.sub(noise_chars, "", text)
 
     # Remove repeated character sequences (e.g., "====", "----", "____")
-    text = re.sub(r'([=\-_*#~])\1{3,}', '', text)
+    text = re.sub(r"([=\-_*#~])\1{3,}", "", text)
 
     # Remove spaces before punctuation
-    text = re.sub(r'\s+([.,;:!?)])', r'\1', text)
+    text = re.sub(r"\s+([.,;:!?)])", r"\1", text)
 
     # Add space after punctuation if missing
-    text = re.sub(r'([.,;:!?])([A-ZÀ-Úa-zà-ú])', r'\1 \2', text)
+    text = re.sub(r"([.,;:!?])([A-ZÀ-Úa-zà-ú])", r"\1 \2", text)
 
     # Remove multiple spaces
-    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r"[ \t]+", " ", text)
 
     # Remove lines with only numbers/symbols (usually noise)
-    lines = text.split('\n')
+    lines = text.split("\n")
     cleaned_lines = []
     for line in lines:
         line = line.strip()
         # Keep line if it has at least 2 alphabetic characters
-        if len(re.findall(r'[A-Za-zÀ-ú]', line)) >= 2:
+        if len(re.findall(r"[A-Za-zÀ-ú]", line)) >= 2:
             cleaned_lines.append(line)
 
-    return '\n'.join(cleaned_lines).strip()
+    return "\n".join(cleaned_lines).strip()
 
 
 def remove_short_lines(text: str, min_length: int = 3) -> str:
@@ -64,9 +64,9 @@ def remove_short_lines(text: str, min_length: int = 3) -> str:
     Returns:
         text without short lines
     """
-    lines = text.split('\n')
+    lines = text.split("\n")
     filtered = [line for line in lines if len(line.strip()) >= min_length]
-    return '\n'.join(filtered)
+    return "\n".join(filtered)
 
 
 def fix_common_ocr_errors(text: str) -> str:
@@ -81,23 +81,21 @@ def fix_common_ocr_errors(text: str) -> str:
     """
     corrections = {
         # Confused letters
-        r'\bRN\b': 'RN',  # Keep RN (document)
-        r'l<': 'k',
-        r'\bl\b(?=[A-Z])': 'I',  # lone l before uppercase -> I
-        r'(?<=[a-z])O(?=[a-z])': 'o',  # O between lowercase -> o
-        r'(?<=[A-Z])o(?=[A-Z])': 'O',  # o between uppercase -> O
-
+        r"\bRN\b": "RN",  # Keep RN (document)
+        r"l<": "k",
+        r"\bl\b(?=[A-Z])": "I",  # lone l before uppercase -> I
+        r"(?<=[a-z])O(?=[a-z])": "o",  # O between lowercase -> o
+        r"(?<=[A-Z])o(?=[A-Z])": "O",  # o between uppercase -> O
         # Numbers confused with letters
-        r'(?<=[A-Za-z])0(?=[A-Za-z])': 'O',  # 0 between letters -> O
-        r'(?<=[0-9])O(?=[0-9])': '0',  # O between numbers -> 0
-        r'(?<=[A-Za-z])1(?=[A-Za-z])': 'l',  # 1 between letters -> l
-        r'(?<=[0-9])l(?=[0-9])': '1',  # l between numbers -> 1
-
+        r"(?<=[A-Za-z])0(?=[A-Za-z])": "O",  # 0 between letters -> O
+        r"(?<=[0-9])O(?=[0-9])": "0",  # O between numbers -> 0
+        r"(?<=[A-Za-z])1(?=[A-Za-z])": "l",  # 1 between letters -> l
+        r"(?<=[0-9])l(?=[0-9])": "1",  # l between numbers -> 1
         # Commonly misrecognized words (Portuguese legal)
-        r'\bDl<\b': 'DK',
-        r'\bNQ\b': 'Nº',
-        r'\bn2\b': 'nº',
-        r'\bNR\b': 'NR',  # Keep
+        r"\bDl<\b": "DK",
+        r"\bNQ\b": "Nº",
+        r"\bn2\b": "nº",
+        r"\bNR\b": "NR",  # Keep
     }
 
     for pattern, replacement in corrections.items():
@@ -123,7 +121,7 @@ def merge_broken_words(text: str, min_word_length: int = 4) -> str:
     # E.g., "COM ARCA" where "COMARCA" would be expected
 
     # This is a simple heuristic — ideally we would use a dictionary
-    lines = text.split('\n')
+    lines = text.split("\n")
     fixed_lines = []
 
     for line in lines:
@@ -139,10 +137,12 @@ def merge_broken_words(text: str, min_word_length: int = 4) -> str:
             word = words[i]
 
             # If word is very short and the next one is too
-            if (len(word) <= 2 and
-                i + 1 < len(words) and
-                len(words[i + 1]) >= 2 and
-                word.isupper() == words[i + 1].isupper()):
+            if (
+                len(word) <= 2
+                and i + 1 < len(words)
+                and len(words[i + 1]) >= 2
+                and word.isupper() == words[i + 1].isupper()
+            ):
                 # Merge the words
                 merged.append(word + words[i + 1])
                 i += 2
@@ -150,9 +150,9 @@ def merge_broken_words(text: str, min_word_length: int = 4) -> str:
                 merged.append(word)
                 i += 1
 
-        fixed_lines.append(' '.join(merged))
+        fixed_lines.append(" ".join(merged))
 
-    return '\n'.join(fixed_lines)
+    return "\n".join(fixed_lines)
 
 
 def normalize_whitespace(text: str) -> str:
@@ -166,7 +166,7 @@ def normalize_whitespace(text: str) -> str:
         text with normalized whitespace
     """
     # Remove spaces at the beginning/end of lines
-    lines = [line.strip() for line in text.split('\n')]
+    lines = [line.strip() for line in text.split("\n")]
 
     # Remove consecutive empty lines
     cleaned = []
@@ -176,17 +176,19 @@ def normalize_whitespace(text: str) -> str:
             cleaned.append(line)
             prev_empty = False
         elif not prev_empty:
-            cleaned.append('')
+            cleaned.append("")
             prev_empty = True
 
-    return '\n'.join(cleaned).strip()
+    return "\n".join(cleaned).strip()
 
 
-def postprocess_ocr_text(text: str,
-                        clean: bool = True,
-                        fix_errors: bool = True,
-                        merge_words: bool = False,
-                        min_line_length: int = 3) -> str:
+def postprocess_ocr_text(
+    text: str,
+    clean: bool = True,
+    fix_errors: bool = True,
+    merge_words: bool = False,
+    min_line_length: int = 3,
+) -> str:
     """
     Complete OCR text post-processing pipeline.
 

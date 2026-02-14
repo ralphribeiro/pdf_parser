@@ -4,6 +4,7 @@ FastAPI dependencies for injection via Depends().
 Centralizes access to the processor singleton and the GPU semaphore,
 facilitating overrides in tests.
 """
+
 import asyncio
 
 from fastapi import Request

@@ -1,0 +1,142 @@
+[project]
+name = "doc-parser"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+# =============================================================================
+# Ruff — formatter + linter (replaces black, isort, flake8, pyupgrade)
+# =============================================================================
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["app", "src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pyflakes + pycodestyle
+    "I",              # isort
+    "UP",             # pyupgrade
+    "B",              # flake8-bugbear
+    "C90",            # mccabe complexity
+    "S",              # flake8-bandit
+    "SIM",            # flake8-simplify
+    "PTH",            # flake8-use-pathlib
+    "RUF",            # ruff-specific rules
+]
+ignore = [
+    "S101",   # allow assert in tests
+    "B008",   # function calls in defaults (FastAPI Depends/Query/File pattern)
+    "SIM108", # ternary operator — if/else often more readable
+    "RUF012", # mutable class-level defaults (Pydantic Config pattern)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S603", "E402", "PTH123"]
+"tests/conftest.py" = ["S101", "S603", "E402", "PTH123"]
+"scripts/**" = ["PTH123"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "src", "config"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 20
+
+# =============================================================================
+# Pylint — deep analysis (design, duplication, conventions)
+#
+# Ruff already handles: style, imports ordering, pycodestyle, pyflakes.
+# Pylint focuses on: design smells, deeper convention checks, duplication.
+# =============================================================================
+
+[tool.pylint.main]
+load-plugins = []
+jobs = 0
+
+[tool.pylint."messages control"]
+disable = [
+    # --- Handled by ruff ---
+    "import-error",
+    "no-member",
+    "no-name-in-module",
+    "c-extension-no-member",
+    "line-too-long",
+    "unnecessary-negation",       # ruff SIM201
+    "raise-missing-from",         # ruff B904
+    "unused-variable",            # ruff F841
+
+    # --- Style / convention (relaxed for initial adoption) ---
+    "missing-module-docstring",
+    "missing-function-docstring",
+    "missing-class-docstring",
+    "too-few-public-methods",
+    "fixme",
+    "invalid-name",
+    "unspecified-encoding",
+
+    # --- Import patterns (common in tests and lazy-loading) ---
+    "import-outside-toplevel",
+    "wrong-import-position",
+    "reimported",
+
+    # --- Pytest patterns ---
+    "redefined-outer-name",       # pytest fixtures redefine names by design
+    "unused-argument",            # mocks, fixtures
+
+    # --- Design (relaxed limits, tighten later) ---
+    "too-many-locals",
+    "too-many-branches",
+    "too-many-statements",
+    "too-many-positional-arguments",
+    "too-many-nested-blocks",
+    "too-many-lines",
+
+    # --- Others ---
+    "broad-exception-caught",     # intentional in pipeline error handling
+    "protected-access",           # tests access _private members
+    "duplicate-code",             # known duplication, refactor later
+    "no-else-return",             # style preference
+    "chained-comparison",         # style preference
+]
+
+[tool.pylint.format]
+max-line-length = 88
+
+[tool.pylint.design]
+max-args = 8
+max-returns = 8
+
+# =============================================================================
+# Mypy — static type checking
+# =============================================================================
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_return_any = false         # too noisy with untyped deps; tighten later
+warn_unused_configs = true
+show_error_codes = true
+disallow_untyped_defs = false   # relaxed initially
+explicit_package_bases = true
+mypy_path = "."
+
+# Core library has pre-existing type issues (str/Path confusion, Literal types).
+# Ignored for initial adoption — tighten progressively as types improve.
+[[tool.mypy.overrides]]
+module = "src.*"
+ignore_errors = true
+
+# =============================================================================
+# Bandit — security scanning
+# =============================================================================
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B110"]  # assert OK; try-except-pass is intentional
+
+# =============================================================================
+# Pytest
+# =============================================================================
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

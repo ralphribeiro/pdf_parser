@@ -1,0 +1,15 @@
+# =============================================================================
+# Development dependencies — linting, formatting, type checking, testing
+#
+# Install:  pip install -r requirements-dev.txt
+# =============================================================================
+
+pre-commit
+ruff
+pylint
+mypy
+bandit[toml]
+xenon
+radon
+pytest
+httpx

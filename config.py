@@ -8,6 +8,7 @@ Default values are kept for backward compatibility with direct usage:
     import config
     config.VERBOSE  # True (or the env var value)
 """
+
 import logging
 import os
 from pathlib import Path
@@ -20,6 +21,7 @@ load_dotenv(override=False)
 # ---------------------------------------------------------------------------
 # Helpers for env var type conversion
 # ---------------------------------------------------------------------------
+
 
 def _env_bool(key: str, default: bool) -> bool:
     """Read env var as bool. Accepts true/1/yes (case-insensitive)."""
@@ -70,6 +72,7 @@ else:
     # Auto-detect: imports torch only when needed
     try:
         import torch
+
         USE_GPU = torch.cuda.is_available()
     except ImportError:
         USE_GPU = False
@@ -99,9 +102,7 @@ STRAIGHTEN_PAGES = _env_bool("DOC_PARSER_STRAIGHTEN_PAGES", False)
 # ---------------------------------------------------------------------------
 
 OCR_LANG = os.getenv("DOC_PARSER_OCR_LANG", "por")
-TESSERACT_CONFIG = os.getenv(
-    "DOC_PARSER_TESSERACT_CONFIG", "--oem 1 --psm 3"
-)
+TESSERACT_CONFIG = os.getenv("DOC_PARSER_TESSERACT_CONFIG", "--oem 1 --psm 3")
 
 # ---------------------------------------------------------------------------
 # OCR - Post-processing
@@ -125,9 +126,7 @@ DESKEW_ANGLE_THRESHOLD = 0.5
 # Tables
 # ---------------------------------------------------------------------------
 
-TABLE_DETECTION_CONFIDENCE = _env_float(
-    "DOC_PARSER_TABLE_DETECTION_CONFIDENCE", 0.7
-)
+TABLE_DETECTION_CONFIDENCE = _env_float("DOC_PARSER_TABLE_DETECTION_CONFIDENCE", 0.7)
 CAMELOT_FLAVOR = os.getenv("DOC_PARSER_CAMELOT_FLAVOR", "lattice")
 
 # ---------------------------------------------------------------------------
@@ -135,9 +134,7 @@ CAMELOT_FLAVOR = os.getenv("DOC_PARSER_CAMELOT_FLAVOR", "lattice")
 # ---------------------------------------------------------------------------
 
 IMAGE_AREA_THRESHOLD = _env_float("DOC_PARSER_IMAGE_AREA_THRESHOLD", 0.3)
-TEXT_COVERAGE_THRESHOLD = _env_float(
-    "DOC_PARSER_TEXT_COVERAGE_THRESHOLD", 0.05
-)
+TEXT_COVERAGE_THRESHOLD = _env_float("DOC_PARSER_TEXT_COVERAGE_THRESHOLD", 0.05)
 
 # ---------------------------------------------------------------------------
 # Searchable PDF
@@ -157,9 +154,7 @@ PARALLEL_MIN_PAGES = _env_int("DOC_PARSER_PARALLEL_MIN_PAGES", 4)
 # Debug
 # ---------------------------------------------------------------------------
 
-SAVE_PREPROCESSED_IMAGES = _env_bool(
-    "DOC_PARSER_SAVE_PREPROCESSED_IMAGES", False
-)
+SAVE_PREPROCESSED_IMAGES = _env_bool("DOC_PARSER_SAVE_PREPROCESSED_IMAGES", False)
 VERBOSE = _env_bool("DOC_PARSER_VERBOSE", True)
 
 

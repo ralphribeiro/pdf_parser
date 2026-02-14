@@ -4,6 +4,7 @@ Shared fixtures for doc_parser tests.
 All fixtures that produce files use tmp_path to avoid
 side effects on the project filesystem.
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -16,14 +17,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # This allows importing src.pipeline and config without torch/doctr installed.
 # ---------------------------------------------------------------------------
 _HEAVY_DEPS = [
-    "torch", "torch.cuda",
-    "numpy", "numpy.ndarray",
+    "torch",
+    "torch.cuda",
+    "numpy",
+    "numpy.ndarray",
     "cv2",
-    "skimage", "skimage.filters", "skimage.transform",
-    "doctr", "doctr.io", "doctr.models", "doctr.models.predictor",
-    "doctr.models.detection", "doctr.models.recognition",
+    "skimage",
+    "skimage.filters",
+    "skimage.transform",
+    "doctr",
+    "doctr.io",
+    "doctr.models",
+    "doctr.models.predictor",
+    "doctr.models.detection",
+    "doctr.models.recognition",
     "transformers",
-    "pdf2image", "pdf2image.convert_from_path",
+    "pdf2image",
+    "pdf2image.convert_from_path",
     "camelot",
     "pytesseract",
     "ghostscript",
@@ -35,14 +45,16 @@ for _mod in _HEAVY_DEPS:
 # torch.cuda.is_available() should return False in tests
 sys.modules["torch"].cuda.is_available.return_value = False
 
-import pytest
 from datetime import datetime
-from src.models.schemas import Document, Page, Block, BlockType
 
+import pytest
+
+from src.models.schemas import Block, BlockType, Document, Page
 
 # ---------------------------------------------------------------------------
 # Model fixtures (Document / Page / Block)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def ocr_blocks():
@@ -65,7 +77,10 @@ def ocr_blocks():
             bbox=[0.1, 0.20, 0.85, 0.30],
             confidence=0.88,
             lines=[
-                {"text": "Second line of the scanned document", "bbox": [0.1, 0.20, 0.85, 0.30]},
+                {
+                    "text": "Second line of the scanned document",
+                    "bbox": [0.1, 0.20, 0.85, 0.30],
+                },
             ],
         ),
     ]
@@ -93,11 +108,16 @@ def sample_document(digital_blocks, ocr_blocks):
     Standard A4 dimensions in points (595 x 842).
     """
     page1 = Page(
-        page=1, source="digital", blocks=digital_blocks,
-        width=595.0, height=842.0,
+        page=1,
+        source="digital",
+        blocks=digital_blocks,
+        width=595.0,
+        height=842.0,
     )
     page2 = Page(
-        page=2, source="digital", blocks=[
+        page=2,
+        source="digital",
+        blocks=[
             Block(
                 block_id="p2_b1",
                 type=BlockType.PARAGRAPH,
@@ -106,11 +126,15 @@ def sample_document(digital_blocks, ocr_blocks):
                 confidence=1.0,
             ),
         ],
-        width=595.0, height=842.0,
+        width=595.0,
+        height=842.0,
     )
     page3 = Page(
-        page=3, source="ocr", blocks=ocr_blocks,
-        width=595.0, height=842.0,
+        page=3,
+        source="ocr",
+        blocks=ocr_blocks,
+        width=595.0,
+        height=842.0,
     )
 
     return Document(
@@ -126,6 +150,7 @@ def sample_document(digital_blocks, ocr_blocks):
 # PDF file fixtures (generated via reportlab, no external dependencies)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def sample_pdf_path(tmp_path):
     """
@@ -140,7 +165,7 @@ def sample_pdf_path(tmp_path):
 
     pdf_path = tmp_path / "test-doc-001.pdf"
     c = Canvas(str(pdf_path), pagesize=A4)
-    width, height = A4  # 595.27, 841.89
+    _width, height = A4  # 595.27, 841.89
 
     # Page 1
     c.setFont("Helvetica", 12)

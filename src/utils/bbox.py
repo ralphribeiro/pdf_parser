@@ -1,10 +1,13 @@
 """
 Bounding box manipulation functions
 """
-from typing import List, Tuple, Any
+
+from typing import Any
 
 
-def normalize_bbox(bbox: List[float], page_width: float, page_height: float) -> List[float]:
+def normalize_bbox(
+    bbox: list[float], page_width: float, page_height: float
+) -> list[float]:
     """
     Normalize bounding box from absolute coordinates to relative (0-1).
 
@@ -20,11 +23,13 @@ def normalize_bbox(bbox: List[float], page_width: float, page_height: float) -> 
         bbox[0] / page_width,
         bbox[1] / page_height,
         bbox[2] / page_width,
-        bbox[3] / page_height
+        bbox[3] / page_height,
     ]
 
 
-def denormalize_bbox(bbox: List[float], page_width: float, page_height: float) -> List[float]:
+def denormalize_bbox(
+    bbox: list[float], page_width: float, page_height: float
+) -> list[float]:
     """
     Convert normalized bbox (0-1) to absolute coordinates.
     """
@@ -32,16 +37,16 @@ def denormalize_bbox(bbox: List[float], page_width: float, page_height: float) -
         bbox[0] * page_width,
         bbox[1] * page_height,
         bbox[2] * page_width,
-        bbox[3] * page_height
+        bbox[3] * page_height,
     ]
 
 
-def bbox_area(bbox: List[float]) -> float:
+def bbox_area(bbox: list[float]) -> float:
     """Calculate area of a bounding box."""
     return (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
 
 
-def bbox_overlap(bbox1: List[float], bbox2: List[float]) -> float:
+def bbox_overlap(bbox1: list[float], bbox2: list[float]) -> float:
     """
     Calculate the overlap area between two bounding boxes.
     """
@@ -56,7 +61,9 @@ def bbox_overlap(bbox1: List[float], bbox2: List[float]) -> float:
     return (x2 - x1) * (y2 - y1)
 
 
-def sort_blocks_by_position(blocks: List[Any], reading_order: str = 'top-to-bottom') -> List[Any]:
+def sort_blocks_by_position(
+    blocks: list[Any], reading_order: str = "top-to-bottom"
+) -> list[Any]:
     """
     Sort blocks by reading position.
 
@@ -67,17 +74,19 @@ def sort_blocks_by_position(blocks: List[Any], reading_order: str = 'top-to-bott
     Returns:
         sorted blocks
     """
-    if reading_order == 'top-to-bottom':
+    if reading_order == "top-to-bottom":
         # Sort by Y (top), then by X (left)
         return sorted(blocks, key=lambda b: (b.bbox[1], b.bbox[0]))
-    elif reading_order == 'left-to-right':
+    elif reading_order == "left-to-right":
         # Sort by X (left), then by Y (top)
         return sorted(blocks, key=lambda b: (b.bbox[0], b.bbox[1]))
     else:
         return blocks
 
 
-def merge_nearby_boxes(boxes: List[List[float]], threshold: float = 0.01) -> List[List[float]]:
+def merge_nearby_boxes(
+    boxes: list[list[float]], threshold: float = 0.01
+) -> list[list[float]]:
     """
     Merge nearby bounding boxes (useful for joining words into lines).
 
@@ -109,7 +118,7 @@ def merge_nearby_boxes(boxes: List[List[float]], threshold: float = 0.01) -> Lis
                 min(last[0], current[0]),
                 min(last[1], current[1]),
                 max(last[2], current[2]),
-                max(last[3], current[3])
+                max(last[3], current[3]),
             ]
         else:
             merged.append(current)

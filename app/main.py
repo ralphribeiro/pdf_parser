@@ -8,6 +8,7 @@ The gpu_semaphore serializes GPU access between concurrent requests.
 Usage:
     uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 """
+
 import asyncio
 import gc
 import logging

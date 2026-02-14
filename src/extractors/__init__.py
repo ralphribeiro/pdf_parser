@@ -1,13 +1,15 @@
 """
 Content extraction modules
 """
+
 from .digital import extract_digital_page
-from .ocr import extract_ocr_page, OCREngine, DocTREngine
+from .ocr import DocTREngine, OCREngine, extract_ocr_page
 from .tables import extract_tables_digital
 
 # Conditional Tesseract import (requires separate installation)
 try:
-    from .ocr_tesseract import extract_ocr_page_tesseract, TesseractEngine
+    from .ocr_tesseract import TesseractEngine, extract_ocr_page_tesseract
+
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
@@ -15,12 +17,12 @@ except ImportError:
     extract_ocr_page_tesseract = None
 
 __all__ = [
-    'extract_digital_page',
-    'extract_ocr_page',
-    'OCREngine',
-    'DocTREngine',
-    'extract_tables_digital',
-    'TesseractEngine',
-    'extract_ocr_page_tesseract',
-    'TESSERACT_AVAILABLE'
+    "TESSERACT_AVAILABLE",
+    "DocTREngine",
+    "OCREngine",
+    "TesseractEngine",
+    "extract_digital_page",
+    "extract_ocr_page",
+    "extract_ocr_page_tesseract",
+    "extract_tables_digital",
 ]

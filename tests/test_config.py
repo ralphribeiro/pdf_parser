@@ -5,6 +5,7 @@ Written BEFORE implementation to guide development.
 Each test validates that config.py reads environment variables with
 DOC_PARSER_ prefix and maintains backward compat with the module interface.
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -201,7 +202,7 @@ class TestConfigEnvOverrides:
         custom_dir = str(tmp_path / "custom_output")
         monkeypatch.setenv("DOC_PARSER_OUTPUT_DIR", custom_dir)
         config = _reload_config()
-        assert config.OUTPUT_DIR == Path(custom_dir)
+        assert Path(custom_dir) == config.OUTPUT_DIR
 
     def test_searchable_pdf_false_from_env(self, monkeypatch):
         monkeypatch.setenv("DOC_PARSER_SEARCHABLE_PDF", "false")
@@ -244,31 +245,49 @@ class TestConfigBackwardCompat:
 
         expected = [
             # Directories
-            "BASE_DIR", "RESOURCE_DIR", "OUTPUT_DIR",
+            "BASE_DIR",
+            "RESOURCE_DIR",
+            "OUTPUT_DIR",
             # Device
-            "DEVICE", "USE_GPU",
+            "DEVICE",
+            "USE_GPU",
             # OCR general
-            "OCR_ENGINE", "OCR_DPI", "IMAGE_DPI", "MIN_CONFIDENCE",
+            "OCR_ENGINE",
+            "OCR_DPI",
+            "IMAGE_DPI",
+            "MIN_CONFIDENCE",
             "OCR_BATCH_SIZE",
             # OCR orientation
-            "ASSUME_STRAIGHT_PAGES", "DETECT_ORIENTATION", "STRAIGHTEN_PAGES",
+            "ASSUME_STRAIGHT_PAGES",
+            "DETECT_ORIENTATION",
+            "STRAIGHTEN_PAGES",
             # OCR tesseract
-            "OCR_LANG", "TESSERACT_CONFIG",
+            "OCR_LANG",
+            "TESSERACT_CONFIG",
             # OCR post-processing
-            "OCR_POSTPROCESS", "OCR_FIX_ERRORS", "OCR_MIN_LINE_LENGTH",
+            "OCR_POSTPROCESS",
+            "OCR_FIX_ERRORS",
+            "OCR_MIN_LINE_LENGTH",
             # Preprocessing (legacy)
-            "OCR_PREPROCESS", "BINARIZATION_METHOD", "DENOISE_KERNEL_SIZE",
+            "OCR_PREPROCESS",
+            "BINARIZATION_METHOD",
+            "DENOISE_KERNEL_SIZE",
             "DESKEW_ANGLE_THRESHOLD",
             # Tables
-            "TABLE_DETECTION_CONFIDENCE", "CAMELOT_FLAVOR",
+            "TABLE_DETECTION_CONFIDENCE",
+            "CAMELOT_FLAVOR",
             # Page detection
-            "IMAGE_AREA_THRESHOLD", "TEXT_COVERAGE_THRESHOLD",
+            "IMAGE_AREA_THRESHOLD",
+            "TEXT_COVERAGE_THRESHOLD",
             # Searchable PDF
             "SEARCHABLE_PDF",
             # Parallelization
-            "PARALLEL_ENABLED", "PARALLEL_WORKERS", "PARALLEL_MIN_PAGES",
+            "PARALLEL_ENABLED",
+            "PARALLEL_WORKERS",
+            "PARALLEL_MIN_PAGES",
             # Debug
-            "SAVE_PREPROCESSED_IMAGES", "VERBOSE",
+            "SAVE_PREPROCESSED_IMAGES",
+            "VERBOSE",
         ]
 
         for attr in expected:

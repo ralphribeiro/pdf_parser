@@ -6,13 +6,13 @@ Endpoints:
     GET  /health   - Service healthcheck
     GET  /info     - Current pipeline configuration
 """
+
 import asyncio
 import gc
 import tempfile
 import time
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Optional
 
 from fastapi import (
     APIRouter,
@@ -37,7 +37,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-class ResponseFormat(str, Enum):
+class ResponseFormat(StrEnum):
     JSON = "json"
     PDF = "pdf"
 
@@ -62,13 +62,13 @@ async def process_document(
         description="Response format: json or pdf",
     ),
     extract_tables: bool = Query(True, description="Extract tables from PDF"),
-    min_confidence: Optional[float] = Query(
+    min_confidence: float | None = Query(
         None, ge=0.0, le=1.0, description="Minimum OCR confidence (overrides config)"
     ),
-    ocr_postprocess: Optional[bool] = Query(
+    ocr_postprocess: bool | None = Query(
         None, description="OCR post-processing (overrides config)"
     ),
-    ocr_fix_errors: Optional[bool] = Query(
+    ocr_fix_errors: bool | None = Query(
         None, description="Fix common OCR errors (overrides config)"
     ),
     processor=Depends(get_processor),
@@ -85,9 +85,7 @@ async def process_document(
     content = await file.read()
 
     if not content or content[:5] != b"%PDF-":
-        raise HTTPException(
-            status_code=400, detail="File is not a valid PDF"
-        )
+        raise HTTPException(status_code=400, detail="File is not a valid PDF")
 
     # 2. Save to temporary file
     tmp_path = None
@@ -159,9 +157,7 @@ async def process_document(
             path=str(pdf_output),
             media_type="application/pdf",
             filename=filename,
-            background=BackgroundTask(
-                _cleanup_dir, Path(tmp_output_dir)
-            ),
+            background=BackgroundTask(_cleanup_dir, Path(tmp_output_dir)),
         )
 
     finally:
@@ -233,5 +229,5 @@ def _cleanup_dir(path: Path):
     try:
         if path.exists():
             shutil.rmtree(path, ignore_errors=True)
-    except Exception:
+    except Exception:  # noqa: S110
         pass

@@ -11,10 +11,10 @@ Requirements:
 - System: tesseract-ocr, tesseract-ocr-por
 - Python: pytesseract
 """
-import logging
-from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
+import logging
+from typing import Any
+
 from pdf2image import convert_from_path
 from PIL import Image
 
@@ -30,7 +30,8 @@ class TesseractEngine:
     """
     OCR engine using Tesseract via pytesseract.
     """
-    def __init__(self, lang: str = None, config_str: str = None):
+
+    def __init__(self, lang: str | None = None, config_str: str | None = None):
         """
         Initialize the Tesseract engine.
 
@@ -41,28 +42,30 @@ class TesseractEngine:
         import pytesseract
 
         self.pytesseract = pytesseract
-        self.lang = lang or getattr(config, 'OCR_LANG', 'por')
+        self.lang = lang or getattr(config, "OCR_LANG", "por")
 
         # Default configuration optimized for documents
         # --oem 1: LSTM engine (best quality)
         # --psm 3: Automatic page segmentation (default)
         # --psm 6: Assume uniform block of text (faster)
-        default_config = '--oem 1 --psm 3'
-        self.config = config_str or getattr(config, 'TESSERACT_CONFIG', default_config)
+        default_config = "--oem 1 --psm 3"
+        self.config = config_str or getattr(config, "TESSERACT_CONFIG", default_config)
 
         # Check if Tesseract is installed
         try:
             version = pytesseract.get_tesseract_version()
-            logger.info("Tesseract Engine initialized: v%s, lang=%s", version, self.lang)
+            logger.info(
+                "Tesseract Engine initialized: v%s, lang=%s", version, self.lang
+            )
         except Exception as e:
             raise RuntimeError(
                 f"Tesseract not found. Install with:\n"
                 f"  Ubuntu/Debian: sudo apt install tesseract-ocr tesseract-ocr-por\n"
                 f"  macOS: brew install tesseract tesseract-lang\n"
                 f"Error: {e}"
-            )
+            ) from e
 
-    def extract_from_image(self, image: Image.Image) -> Dict[str, Any]:
+    def extract_from_image(self, image: Image.Image) -> dict[str, Any]:
         """
         Extract text from an image with position data.
 
@@ -77,7 +80,7 @@ class TesseractEngine:
             image,
             lang=self.lang,
             config=self.config,
-            output_type=self.pytesseract.Output.DICT
+            output_type=self.pytesseract.Output.DICT,
         )
         return data
 
@@ -92,14 +95,13 @@ class TesseractEngine:
             extracted text
         """
         return self.pytesseract.image_to_string(
-            image,
-            lang=self.lang,
-            config=self.config
+            image, lang=self.lang, config=self.config
         )
 
 
-def extract_ocr_page_tesseract(pdf_path: str, page_number: int,
-                               ocr_engine: Optional[TesseractEngine] = None) -> Tuple[List[Block], float, float]:
+def extract_ocr_page_tesseract(
+    pdf_path: str, page_number: int, ocr_engine: TesseractEngine | None = None
+) -> tuple[list[Block], float, float]:
     """
     Extract content from a page using Tesseract OCR.
 
@@ -112,13 +114,10 @@ def extract_ocr_page_tesseract(pdf_path: str, page_number: int,
         (blocks, width, height)
     """
     # Convert page to high-resolution image
-    dpi = getattr(config, 'OCR_DPI', config.IMAGE_DPI)
+    dpi = getattr(config, "OCR_DPI", config.IMAGE_DPI)
 
     images = convert_from_path(
-        pdf_path,
-        first_page=page_number,
-        last_page=page_number,
-        dpi=dpi
+        pdf_path, first_page=page_number, last_page=page_number, dpi=dpi
     )
 
     if not images:
@@ -148,8 +147,9 @@ def extract_ocr_page_tesseract(pdf_path: str, page_number: int,
     return blocks, page_width, page_height
 
 
-def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
-                           page_width: float, page_height: float) -> List[Block]:
+def _parse_tesseract_result(
+    data: dict[str, Any], page_number: int, page_width: float, page_height: float
+) -> list[Block]:
     """
     Parse Tesseract result and convert to blocks.
 
@@ -168,12 +168,12 @@ def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
     current_block_boxes = []
     current_block_confs = []
 
-    n_boxes = len(data['text'])
+    n_boxes = len(data["text"])
 
     for i in range(n_boxes):
-        text = data['text'][i].strip()
-        conf = int(data['conf'][i])
-        block_num = data['block_num'][i]
+        text = data["text"][i].strip()
+        conf = int(data["conf"][i])
+        block_num = data["block_num"][i]
 
         # Ignore empty entries or those with very low confidence
         if not text or conf < 0:
@@ -190,7 +190,7 @@ def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
                     page_number,
                     len(blocks) + 1,
                     page_width,
-                    page_height
+                    page_height,
                 )
                 if block:
                     blocks.append(block)
@@ -203,12 +203,14 @@ def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
 
         # Add word to current block
         current_block_words.append(text)
-        current_block_boxes.append({
-            'left': data['left'][i],
-            'top': data['top'][i],
-            'width': data['width'][i],
-            'height': data['height'][i]
-        })
+        current_block_boxes.append(
+            {
+                "left": data["left"][i],
+                "top": data["top"][i],
+                "width": data["width"][i],
+                "height": data["height"][i],
+            }
+        )
         current_block_confs.append(conf)
 
     # Save last block
@@ -220,7 +222,7 @@ def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
             page_number,
             len(blocks) + 1,
             page_width,
-            page_height
+            page_height,
         )
         if block:
             blocks.append(block)
@@ -228,10 +230,15 @@ def _parse_tesseract_result(data: Dict[str, Any], page_number: int,
     return blocks
 
 
-def _create_block_from_words(words: List[str], boxes: List[dict],
-                            confs: List[int], page_number: int,
-                            block_counter: int, page_width: float,
-                            page_height: float) -> Optional[Block]:
+def _create_block_from_words(
+    words: list[str],
+    boxes: list[dict],
+    confs: list[int],
+    page_number: int,
+    block_counter: int,
+    page_width: float,
+    page_height: float,
+) -> Block | None:
     """
     Create a Block from a list of words.
     """
@@ -239,17 +246,17 @@ def _create_block_from_words(words: List[str], boxes: List[dict],
         return None
 
     # Join words into text
-    text = ' '.join(words)
+    text = " ".join(words)
     text = normalize_text(text)
 
     if not text or len(text.strip()) < 2:
         return None
 
     # Calculate block bbox (union of all words)
-    x1 = min(b['left'] for b in boxes)
-    y1 = min(b['top'] for b in boxes)
-    x2 = max(b['left'] + b['width'] for b in boxes)
-    y2 = max(b['top'] + b['height'] for b in boxes)
+    x1 = min(b["left"] for b in boxes)
+    y1 = min(b["top"] for b in boxes)
+    x2 = max(b["left"] + b["width"] for b in boxes)
+    y2 = max(b["top"] + b["height"] for b in boxes)
 
     # Normalize bbox
     bbox = normalize_bbox([x1, y1, x2, y2], page_width, page_height)
@@ -258,7 +265,7 @@ def _create_block_from_words(words: List[str], boxes: List[dict],
     confidence = sum(confs) / len(confs) / 100.0
 
     # Filter blocks with very low confidence
-    min_conf = getattr(config, 'MIN_CONFIDENCE', 0.3)
+    min_conf = getattr(config, "MIN_CONFIDENCE", 0.3)
     if confidence < min_conf:
         return None
 
@@ -267,5 +274,5 @@ def _create_block_from_words(words: List[str], boxes: List[dict],
         type=BlockType.PARAGRAPH,
         text=text,
         bbox=bbox,
-        confidence=confidence
+        confidence=confidence,
     )

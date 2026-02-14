@@ -1,11 +1,10 @@
 """
 Table extractor for PDFs (digital and scanned)
 """
+
 import logging
-from typing import List, Optional, Tuple
 
 import camelot
-import numpy as np
 
 import config
 from src.models.schemas import Block, BlockType
@@ -14,8 +13,9 @@ from src.utils.bbox import normalize_bbox
 logger = logging.getLogger(__name__)
 
 
-def extract_tables_digital(pdf_path: str, page_number: int,
-                          flavor: str = None) -> List[Block]:
+def extract_tables_digital(
+    pdf_path: str, page_number: int, flavor: str | None = None
+) -> list[Block]:
     """
     Extract tables from a digital page using camelot.
 
@@ -35,10 +35,7 @@ def extract_tables_digital(pdf_path: str, page_number: int,
     try:
         # Extract tables from the page
         tables = camelot.read_pdf(
-            pdf_path,
-            pages=str(page_number),
-            flavor=flavor,
-            suppress_stdout=True
+            pdf_path, pages=str(page_number), flavor=flavor, suppress_stdout=True
         )
 
         if not tables:
@@ -47,7 +44,7 @@ def extract_tables_digital(pdf_path: str, page_number: int,
         # Process each detected table
         for idx, table in enumerate(tables):
             # Check detection confidence
-            confidence = table.parsing_report.get('accuracy', 0.0) / 100.0
+            confidence = table.parsing_report.get("accuracy", 0.0) / 100.0
 
             if confidence < config.TABLE_DETECTION_CONFIDENCE:
                 continue
@@ -68,14 +65,13 @@ def extract_tables_digital(pdf_path: str, page_number: int,
             # Convert to normalized coordinates
             # Need to get page dimensions
             from src.detector import get_page_dimensions
+
             page_width, page_height = get_page_dimensions(pdf_path, page_number)
 
             # Camelot uses coordinates with inverted Y (origin at bottom)
             # Need to convert to Y with origin at top
             bbox = normalize_bbox(
-                [x1, page_height - y2, x2, page_height - y1],
-                page_width,
-                page_height
+                [x1, page_height - y2, x2, page_height - y1], page_width, page_height
             )
 
             block = Block(
@@ -84,7 +80,7 @@ def extract_tables_digital(pdf_path: str, page_number: int,
                 text=None,  # Tables don't have a text field
                 bbox=bbox,
                 confidence=confidence,
-                rows=rows
+                rows=rows,
             )
 
             blocks.append(block)
@@ -95,9 +91,9 @@ def extract_tables_digital(pdf_path: str, page_number: int,
     return blocks
 
 
-def extract_tables_from_blocks(blocks: List[Block],
-                               min_rows: int = 2,
-                               min_cols: int = 2) -> List[Block]:
+def extract_tables_from_blocks(
+    blocks: list[Block], min_rows: int = 2, min_cols: int = 2
+) -> list[Block]:
     """
     Detect tables in OCR text blocks using heuristics.
 
@@ -118,7 +114,7 @@ def extract_tables_from_blocks(blocks: List[Block],
     return []
 
 
-def merge_table_cells(rows: List[List[str]]) -> List[List[str]]:
+def merge_table_cells(rows: list[list[str]]) -> list[list[str]]:
     """
     Merge table cells that were incorrectly split.
 
@@ -145,7 +141,7 @@ def merge_table_cells(rows: List[List[str]]) -> List[List[str]]:
     return cleaned_rows
 
 
-def validate_table_structure(rows: List[List[str]]) -> bool:
+def validate_table_structure(rows: list[list[str]]) -> bool:
     """
     Validate if the table structure is consistent.
 
@@ -165,15 +161,14 @@ def validate_table_structure(rows: List[List[str]]) -> bool:
         return False
 
     for row in rows:
-        if len(row) != num_cols:
-            # Allow small variations (+/-1 column)
-            if abs(len(row) - num_cols) > 1:
-                return False
+        # Allow small variations (+/-1 column)
+        if len(row) != num_cols and abs(len(row) - num_cols) > 1:
+            return False
 
     return True
 
 
-def normalize_table_data(rows: List[List[str]]) -> List[List[str]]:
+def normalize_table_data(rows: list[list[str]]) -> list[list[str]]:
     """
     Normalize table data (text cleanup, formatting).
 
@@ -192,10 +187,10 @@ def normalize_table_data(rows: List[List[str]]) -> List[List[str]]:
             cell_str = str(cell).strip()
 
             # Remove line breaks within cells
-            cell_str = cell_str.replace('\n', ' ')
+            cell_str = cell_str.replace("\n", " ")
 
             # Remove multiple spaces
-            cell_str = ' '.join(cell_str.split())
+            cell_str = " ".join(cell_str.split())
 
             normalized_row.append(cell_str)
 

@@ -5,11 +5,11 @@ Written BEFORE implementation to define the HTTP contract.
 The DocumentProcessor is mocked -- these tests validate the HTTP layer,
 not the OCR pipeline.
 """
+
 import io
 import sys
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
