@@ -161,9 +161,14 @@ async def process_document(
         )
 
     finally:
-        # Clean temporary files (JSON path; PDF cleaned via BackgroundTask)
+        # Clean temporary files
+        # Input temp dir (for JSON responses or if PDF generation failed)
         if tmp_path and tmp_path.exists():
             _cleanup_dir(tmp_path.parent)
+        # Output temp dir (only if BackgroundTask was NOT registered,
+        # i.e. an error occurred before FileResponse was created)
+        if tmp_output_dir and Path(tmp_output_dir).exists():
+            _cleanup_dir(Path(tmp_output_dir))
         gc.collect()
 
 

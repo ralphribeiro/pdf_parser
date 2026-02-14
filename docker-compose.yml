@@ -17,9 +17,11 @@ services:
     ports:
       - "8000:8000"
 
-    # Volume for persistent output
+    # Volumes
     volumes:
       - ./output:/app/output
+      # Persist doctr/torch model cache so models aren't re-downloaded on restart
+      - doctr-cache:/root/.cache
 
     # AMD GPU access via ROCm
     devices:
@@ -45,3 +47,7 @@ services:
       - PYTORCH_HIP_ALLOC_CONF=max_split_size_mb:512
 
     restart: unless-stopped
+
+# Named volumes
+volumes:
+  doctr-cache:
