@@ -14,16 +14,16 @@ import config
 def detect_page_type(pdf_path: str, page_number: int) -> Literal["digital", "scan", "hybrid"]:
     """
     Detecta o tipo de página usando análise de área de imagem e cobertura de texto.
-    
+
     Lógica:
     - Se tem imagem grande (>30% da página) E pouco texto (<5% de cobertura) -> scan/hybrid
     - Se tem texto cobrindo área significativa (>5%) -> digital
     - Caso contrário -> scan
-    
+
     Args:
         pdf_path: caminho para o arquivo PDF
         page_number: número da página (1-indexed)
-    
+
     Returns:
         "digital": texto nativo extraível
         "scan": imagem que precisa de OCR
@@ -31,13 +31,13 @@ def detect_page_type(pdf_path: str, page_number: int) -> Literal["digital", "sca
     """
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_number - 1]
-        
+
         # Verifica se há imagens grandes na página
         has_large_img, image_coverage = _has_large_images(page)
-        
+
         # Calcula cobertura de texto selecionável
         text_coverage = _get_text_coverage(page)
-        
+
         # Lógica de decisão
         if has_large_img:
             # Página tem imagem grande
@@ -62,21 +62,21 @@ def detect_page_type(pdf_path: str, page_number: int) -> Literal["digital", "sca
 def _has_large_images(page) -> Tuple[bool, float]:
     """
     Verifica se a página tem imagens que cobrem área significativa.
-    
+
     Args:
         page: página do pdfplumber
-    
+
     Returns:
         (tem_imagem_grande, cobertura_percentual)
     """
     images = page.images
     if not images:
         return False, 0.0
-    
+
     page_area = page.width * page.height
     if page_area == 0:
         return False, 0.0
-    
+
     # Calcula área total de imagens
     total_image_area = 0
     for img in images:
@@ -85,35 +85,35 @@ def _has_large_images(page) -> Tuple[bool, float]:
         x1 = img.get('x1', 0)
         top = img.get('top', 0)
         bottom = img.get('bottom', 0)
-        
+
         width = abs(x1 - x0)
         height = abs(bottom - top)
         total_image_area += width * height
-    
+
     coverage = total_image_area / page_area
     has_large = coverage > config.IMAGE_AREA_THRESHOLD
-    
+
     return has_large, coverage
 
 
 def _get_text_coverage(page) -> float:
     """
     Calcula a porcentagem da página coberta por texto selecionável.
-    
+
     Args:
         page: página do pdfplumber
-    
+
     Returns:
         cobertura (0.0 a 1.0)
     """
     words = page.extract_words()
     if not words:
         return 0.0
-    
+
     page_area = page.width * page.height
     if page_area == 0:
         return 0.0
-    
+
     # Calcula área total coberta por palavras
     total_text_area = 0
     for w in words:
@@ -121,23 +121,23 @@ def _get_text_coverage(page) -> float:
         x1 = w.get('x1', 0)
         top = w.get('top', 0)
         bottom = w.get('bottom', 0)
-        
+
         width = abs(x1 - x0)
         height = abs(bottom - top)
         total_text_area += width * height
-    
+
     return total_text_area / page_area
 
 
 def has_extractable_text(pdf_path: str, page_number: int, min_chars: int = 10) -> bool:
     """
     Verifica se uma página tem texto extraível
-    
+
     Args:
         pdf_path: caminho para o PDF
         page_number: número da página (1-indexed)
         min_chars: mínimo de caracteres para considerar "tem texto"
-    
+
     Returns:
         True se tem texto extraível
     """
@@ -153,11 +153,11 @@ def has_extractable_text(pdf_path: str, page_number: int, min_chars: int = 10) -
 def get_page_dimensions(pdf_path: str, page_number: int) -> tuple[float, float]:
     """
     Retorna dimensões da página (largura, altura) em pontos
-    
+
     Args:
         pdf_path: caminho para o PDF
         page_number: número da página (1-indexed)
-    
+
     Returns:
         (width, height) em pontos
     """
@@ -169,23 +169,23 @@ def get_page_dimensions(pdf_path: str, page_number: int) -> tuple[float, float]:
 def get_page_info(pdf_path: str, page_number: int) -> dict:
     """
     Retorna informações detalhadas sobre uma página (útil para debug).
-    
+
     Args:
         pdf_path: caminho para o PDF
         page_number: número da página (1-indexed)
-    
+
     Returns:
         dict com informações da página
     """
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_number - 1]
-        
+
         has_large_img, image_coverage = _has_large_images(page)
         text_coverage = _get_text_coverage(page)
-        
+
         text = page.extract_text()
         char_count = len(text.strip()) if text else 0
-        
+
         return {
             'page_number': page_number,
             'width': page.width,
