@@ -153,11 +153,14 @@ async def process_document(
         _cleanup_dir(tmp_path.parent)
         tmp_path = None  # Avoid double cleanup in finally
 
+        output_dir_to_clean = Path(tmp_output_dir)
+        tmp_output_dir = None  # Prevent finally from cleaning it
+
         return FileResponse(
             path=str(pdf_output),
             media_type="application/pdf",
             filename=filename,
-            background=BackgroundTask(_cleanup_dir, Path(tmp_output_dir)),
+            background=BackgroundTask(_cleanup_dir, output_dir_to_clean),
         )
 
     finally:
