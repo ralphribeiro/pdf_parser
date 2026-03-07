@@ -85,7 +85,7 @@ def _process_digital_page_worker(args: tuple[str, int, bool]) -> tuple[int, Page
 
                     blocks = filtered_blocks + table_blocks
                     blocks = sort_blocks_by_position(blocks)
-            except Exception:  # noqa: S110
+            except Exception:
                 pass  # Silently ignore table errors
 
         page = Page(

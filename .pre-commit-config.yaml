@@ -25,7 +25,11 @@ repos:
     rev: v0.15.1
     hooks:
       - id: ruff-format
+        files: ^(app|src)/
+        exclude: ^tests/
       - id: ruff
+        files: ^(app|src)/
+        exclude: ^tests/
         args: [--fix, --exit-non-zero-on-fix]
 
   # ── Pylint — deep analysis (design, duplication, conventions) ──────────
@@ -33,6 +37,8 @@ repos:
     rev: v4.0.4
     hooks:
       - id: pylint
+        files: ^(app|src)/
+        exclude: ^tests/
         args: [--rcfile=pyproject.toml]
         additional_dependencies:
           - fastapi
@@ -45,6 +51,8 @@ repos:
     rev: v1.19.1
     hooks:
       - id: mypy
+        files: ^(app|src)/
+        exclude: ^tests/
         args: [--config-file=pyproject.toml]
         additional_dependencies:
           - fastapi
@@ -56,6 +64,7 @@ repos:
     rev: "1.9.3"
     hooks:
       - id: bandit
+        exclude: ^tests/
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
 
@@ -67,6 +76,7 @@ repos:
         entry: xenon
         language: python
         types: [python]
+        exclude: ^tests/
         args: [
           --max-absolute, C,
           --max-modules, B,

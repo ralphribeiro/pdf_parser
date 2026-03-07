@@ -17,7 +17,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 import config
+from app.routers.async_jobs import router as async_jobs_router
 from app.routers.process import router as process_router
+from app.routers.semantic_search import router as semantic_search_router
+from app.routers.webhooks import router as webhooks_router
 
 # Configure centralized project logging before any module emits logs
 config.setup_logging()
@@ -77,6 +80,9 @@ def create_app() -> FastAPI:
     )
 
     application.include_router(process_router)
+    application.include_router(async_jobs_router)
+    application.include_router(semantic_search_router)
+    application.include_router(webhooks_router)
 
     return application
 

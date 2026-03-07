@@ -168,6 +168,63 @@ VERBOSE = _env_bool("DOC_PARSER_VERBOSE", True)
 
 
 # ---------------------------------------------------------------------------
+# Celery Async Jobs
+# ---------------------------------------------------------------------------
+
+CELERY_BROKER_URL = os.getenv(
+    "DOC_PARSER_CELERY_BROKER_URL", "redis://localhost:6379/0"
+)
+CELERY_RESULT_BACKEND = os.getenv(
+    "DOC_PARSER_CELERY_RESULT_BACKEND", "redis://localhost:6379/0"
+)
+CELERY_WORKERS = _env_int("DOC_PARSER_CELERY_WORKERS", 2)
+CELERY_TASK_SERIALIZER = os.getenv("DOC_PARSER_CELERY_TASK_SERIALIZER", "pickle")
+CELERY_RESULT_SERIALIZER = os.getenv("DOC_PARSER_CELERY_RESULT_SERIALIZER", "pickle")
+CELERY_TASK_TIME_LIMIT = _env_int("DOC_PARSER_CELERY_TASK_TIME_LIMIT", 3600)  # 1 hora
+CELERY_TASK_SOFT_TIME_LIMIT = _env_int(
+    "DOC_PARSER_CELERY_TASK_SOFT_TIME_LIMIT", 3000
+)  # 50 min
+
+
+# ---------------------------------------------------------------------------
+# MongoDB
+# ---------------------------------------------------------------------------
+
+MONGODB_URI = os.getenv("DOC_PARSER_MONGODB_URI", "mongodb://localhost:27017")
+MONGODB_DB = os.getenv("DOC_PARSER_MONGODB_DB", "caseiro_docs")
+MONGODB_USE_VECTORS = _env_bool("DOC_PARSER_MONGODB_USE_VECTORS", True)
+
+
+# ---------------------------------------------------------------------------
+# Embeddings (OpenAI-compatible API)
+# ---------------------------------------------------------------------------
+
+EMBEDDINGS_URL = os.getenv(
+    "DOC_PARSER_EMBEDDINGS_URL", "http://localhost:8080/v1/embeddings"
+)
+EMBEDDINGS_MODEL = os.getenv("DOC_PARSER_EMBEDDINGS_MODEL", "Qwen3-Embedding")
+EMBEDDINGS_API_KEY = os.getenv("DOC_PARSER_EMBEDDINGS_API_KEY", "llama.cpp")
+EMBEDDINGS_BATCH_SIZE = _env_int("DOC_PARSER_EMBEDDINGS_BATCH_SIZE", 1)
+
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+WEBHOOK_URL = os.getenv("DOC_PARSER_WEBHOOK_URL", "")
+WEBHOOK_AUTH_TOKEN = os.getenv("DOC_PARSER_WEBHOOK_AUTH_TOKEN", "")
+WEBHOOK_MAX_RETRIES = _env_int("DOC_PARSER_WEBHOOK_MAX_RETRIES", 3)
+WEBHOOK_TIMEOUT = _env_int("DOC_PARSER_WEBHOOK_TIMEOUT", 30)
+
+
+# ---------------------------------------------------------------------------
+# File Size Limits
+# ---------------------------------------------------------------------------
+
+MAX_FILE_SIZE = _env_int("DOC_PARSER_MAX_FILE_SIZE", 50)  # MB
+
+
+# ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
 

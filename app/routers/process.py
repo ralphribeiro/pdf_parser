@@ -237,5 +237,5 @@ def _cleanup_dir(path: Path):
     try:
         if path.exists():
             shutil.rmtree(path, ignore_errors=True)
-    except Exception:  # noqa: S110
+    except Exception:
         pass

@@ -212,8 +212,152 @@ cp .env.example .env
 | `DOC_PARSER_OCR_FIX_ERRORS` | `true` | Fix common OCR errors |
 | `DOC_PARSER_VERBOSE` | `true` | Verbose logging output |
 | `DOC_PARSER_OUTPUT_DIR` | `./output` | Default output directory |
+| `DOC_PARSER_CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker URL |
+| `DOC_PARSER_CELERY_RESULT_BACKEND` | `redis://localhost:6379/0` | Celery result backend |
+| `DOC_PARSER_CELERY_WORKERS` | `2` | Number of Celery workers |
+| `DOC_PARSER_MONGODB_URI` | `mongodb://localhost:27017` | MongoDB connection URI |
+| `DOC_PARSER_MONGODB_DB` | `caseiro_docs` | MongoDB database name |
+| `DOC_PARSER_MONGODB_USE_VECTORS` | `true` | Enable MongoDB vector search |
+| `DOC_PARSER_EMBEDDINGS_URL` | `http://localhost:11434/api/generate` | Embeddings API URL |
+| `DOC_PARSER_EMBEDDINGS_MODEL` | `nomic-embed-text` | Embeddings model name |
+| `DOC_PARSER_WEBHOOK_URL` | `` | Webhook URL for job notifications |
 
 See `config.py` for the full list of available settings.
+
+## Async Job Processing
+
+Processamento assíncrono usando Celery, Redis e MongoDB para jobs longos (PDFs com OCR).
+
+### Endpoints de Jobs
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| POST | `/jobs` | Criar novo job de processamento |
+| GET | `/jobs/{job_id}` | Obter status e resultado |
+| DELETE | `/jobs/{job_id}` | Cancelar job pendente |
+| GET | `/jobs` | Listar jobs (debug) |
+
+### Busca Semântica
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| POST | `/search/semantic` | Buscar documentos por semelhança vetorial |
+| GET | `/search/semantic` | Buscar com query string |
+
+### Exemplo de Uso
+
+#### Criar Job
+
+```bash
+curl -X POST http://localhost:8000/jobs \
+  -F "file=@document.pdf" \
+  -F "generate_embeddings=true"
+```
+
+**Resposta:**
+```json
+{
+  "job_id": "job_abc123",
+  "status": "pending",
+  "created_at": "2026-03-04T12:00:00Z",
+  "file_size": 12345678
+}
+```
+
+#### Consultar Status
+
+```bash
+curl http://localhost:8000/jobs/job_abc123
+```
+
+**Resposta (pendente):**
+```json
+{
+  "job_id": "job_abc123",
+  "status": "processing",
+  "created_at": "2026-03-04T12:00:00Z",
+  "updated_at": "2026-03-04T12:00:01Z"
+}
+```
+
+**Resposta (completo):**
+```json
+{
+  "job_id": "job_abc123",
+  "status": "completed",
+  "created_at": "2026-03-04T12:00:00Z",
+  "updated_at": "2026-03-04T12:05:00Z",
+  "result": {
+    "doc_id": "doc-uuid",
+    "total_pages": 10,
+    "processing_time_seconds": 300.5
+  },
+  "embeddings_generated": true,
+  "error": null
+}
+```
+
+#### Busca Semântica
+
+```bash
+curl -X POST http://localhost:8000/search/semantic \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Qual é o valor da cláusula de rescisão?",
+    "top_k": 5,
+    "min_score": 0.7,
+    "include_matches": true,
+    "matches_limit": 3
+  }'
+```
+
+**Resposta:**
+```json
+{
+  "query": "Qual é o valor da cláusula de rescisão?",
+  "total_results": 2,
+  "results": [
+    {
+      "doc_id": "contrato-2024",
+      "score": 0.92,
+      "total_pages": 45,
+      "created_at": "2026-03-04T10:00:00Z",
+      "matches": [
+        {
+          "page": 12,
+          "block_id": "p12_b3",
+          "text": "A cláusula de rescisão contratual tem o valor de R$ 50.000,00.",
+          "bbox": [0.1, 0.2, 0.8, 0.25]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Iniciar Celery Workers
+
+```bash
+# Iniciar workers (modo solo para debug)
+python scripts/celery_worker.py worker --workers 2
+
+# Iniciar com monitoramento Flower
+python scripts/celery_worker.py worker --workers 4 --with-flower
+
+# Acessar Flower: http://localhost:5555
+```
+
+### Iniciar com Docker
+
+```bash
+docker compose up --build
+
+# Iniciar workers separadamente
+docker compose up redis mongodb
+
+# Iniciar workers em background
+celery -A src.celery_worker worker --loglevel=info --concurrency=2 -Q default
+```
 
 ## Architecture
 

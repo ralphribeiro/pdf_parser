@@ -11,6 +11,28 @@
 # =============================================================================
 
 services:
+  redis:
+    image: "redis:7-alpine"
+    container_name: doc-parser-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  mongodb:
+    image: "mongo:7.0"
+    container_name: doc-parser-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin123
+      - MONGO_INITDB_DATABASE=caseiro_docs
+    volumes:
+      - mongodb-data:/data/db
+    restart: unless-stopped
+
   doc-parser:
     build: .
     container_name: doc-parser-api
@@ -48,6 +70,40 @@ services:
 
     restart: unless-stopped
 
+  # =============================================================================
+  # Celery Services
+  # =============================================================================
+
+  celery-worker:
+    build: .
+    container_name: doc-parser-celery-worker
+    command: celery -A src.celery_worker worker --loglevel=info --concurrency=2 --pool=solo --without-gossip --without-mingle --without-heartbeat
+    environment:
+      - DOC_PARSER_CELERY_BROKER_URL=redis://redis:6379/0
+      - DOC_PARSER_CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - C_FORCE_ROOT=true
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  celery-beat:
+    build: .
+    container_name: doc-parser-celery-beat
+    command: celery -A src.celery_worker beat --max-interval=300
+    environment:
+      - DOC_PARSER_CELERY_BROKER_URL=redis://redis:6379/0
+      - DOC_PARSER_CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - C_FORCE_ROOT=true
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+    restart: unless-stopped
+
 # Named volumes
 volumes:
   doctr-cache:
+  redis-data:
+  mongodb-data:

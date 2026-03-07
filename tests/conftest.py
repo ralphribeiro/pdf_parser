@@ -5,12 +5,18 @@ All fixtures that produce files use tmp_path to avoid
 side effects on the project filesystem.
 """
 
+import io
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
 # Add project root to path (same pattern as scripts/)
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# =============================================================================
+# Mock other heavy dependencies
+# =============================================================================
 
 # ---------------------------------------------------------------------------
 # Mock heavy dependencies that are not needed in unit tests.
@@ -44,6 +50,13 @@ for _mod in _HEAVY_DEPS:
 
 # torch.cuda.is_available() should return False in tests
 sys.modules["torch"].cuda.is_available.return_value = False
+
+# Load test environment variables before importing app modules
+_test_env_file = Path(__file__).parent.parent / ".env.test"
+if _test_env_file.exists():
+    # Override MongoDB URI with test container
+    os.environ["DOC_PARSER_MONGODB_URI"] = "mongodb://test:test123@mongodb-test:27017"
+    os.environ["DOC_PARSER_MONGODB_DB"] = "test_caseiro_docs"
 
 from datetime import datetime
 
@@ -190,3 +203,81 @@ def output_dir(tmp_path):
     out = tmp_path / "output"
     out.mkdir()
     return out
+
+
+# ---------------------------------------------------------------------------
+# API fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_processor(sample_document):
+    """Mocked DocumentProcessor that returns sample_document."""
+    processor = MagicMock()
+    processor.use_gpu = False
+    processor.ocr_engine_type = "doctr"
+    processor.ocr_engine = MagicMock()
+
+    processor.process_document_parallel.return_value = sample_document
+    processor.process_document.return_value = sample_document
+
+    def fake_save_json(document, output_path, **kwargs):
+        import json
+
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(document.to_json_dict(), f)
+
+    def fake_save_pdf(document, pdf_path, output_path):
+        """Generate a minimal valid PDF for tests."""
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen.canvas import Canvas
+
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        c = Canvas(str(output_path), pagesize=A4)
+        c.drawString(100, 700, "searchable test")
+        c.save()
+
+    processor.save_to_json.side_effect = fake_save_json
+    processor.save_to_searchable_pdf.side_effect = fake_save_pdf
+
+    return processor
+
+
+@pytest.fixture
+def client(mock_processor):
+    """FastAPI TestClient with mocked processor."""
+    from app.main import create_app
+
+    app = create_app()
+
+    from fastapi.testclient import TestClient
+
+    with TestClient(app) as tc:
+        # Override AFTER lifespan initializes (otherwise lifespan overrides)
+        app.state.processor = mock_processor
+        yield tc
+
+
+@pytest.fixture
+def pdf_bytes(sample_pdf_path):
+    """Bytes of a valid PDF for upload."""
+    return sample_pdf_path.read_bytes()
+
+
+@pytest.fixture
+def pdf_upload(pdf_bytes):
+    """Tuple (filename, file_obj, content_type) for upload."""
+    return ("test.pdf", io.BytesIO(pdf_bytes), "application/pdf")
+
+
+@pytest.fixture
+def mock_db():
+    """Mock MongoDB database for tests."""
+    mock_db = MagicMock()
+    mock_db.create_collection = MagicMock()
+    mock_db.list_collection_names = MagicMock(return_value=[])
+    mock_db.get_collection = MagicMock()
+    mock_db.command = MagicMock()
+    mock_db.admin.command = MagicMock()
+    return mock_db
