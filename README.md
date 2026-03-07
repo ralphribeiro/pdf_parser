@@ -10,6 +10,10 @@ Local pipeline for text and structure extraction from mixed PDFs (digital and sc
 - **Searchable PDFs**: Invisible text overlay on scanned pages for search/selection
 - **Parallel processing**: Concurrent page processing with `ProcessPoolExecutor`
 - **REST API**: FastAPI endpoints for HTTP-based processing
+- **Async jobs**: Celery-based pipeline for long-running documents
+- **Semantic search**: Embeddings + vector similarity over processed documents
+- **Webhooks**: Async notification and verification endpoints
+- **MongoDB fallback search**: Local cosine fallback when `$vectorSearch` is unavailable
 - **Docker**: Ready-to-deploy container with ROCm support
 - **Positioning**: Normalized bounding box coordinates (0-1) for each block
 - **OCR post-processing**: Noise removal, error correction, broken word merging
@@ -88,6 +92,14 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 | POST   | `/process` | Process a PDF and return JSON or searchable PDF |
 | GET    | `/health`  | Service health check (status, GPU, OCR engine) |
 | GET    | `/info`    | Current pipeline configuration             |
+| POST   | `/jobs/` | Create asynchronous processing job |
+| GET    | `/jobs/{job_id}` | Get job status and result |
+| DELETE | `/jobs/{job_id}` | Cancel pending/processing job |
+| GET    | `/jobs` | List jobs (debug) |
+| POST   | `/search/semantic` | Semantic search using embeddings |
+| GET    | `/search/semantic` | Semantic search via query params |
+| POST   | `/webhooks/verify` | Verify webhook signature |
+| POST   | `/webhooks/{job_id}` | Receive webhook payload |
 
 #### `POST /process` Parameters
 
@@ -217,8 +229,8 @@ cp .env.example .env
 | `DOC_PARSER_CELERY_WORKERS` | `2` | Number of Celery workers |
 | `DOC_PARSER_MONGODB_URI` | `mongodb://localhost:27017` | MongoDB connection URI |
 | `DOC_PARSER_MONGODB_DB` | `caseiro_docs` | MongoDB database name |
-| `DOC_PARSER_MONGODB_USE_VECTORS` | `true` | Enable MongoDB vector search |
-| `DOC_PARSER_EMBEDDINGS_URL` | `http://localhost:11434/api/generate` | Embeddings API URL |
+| `DOC_PARSER_MONGODB_USE_VECTORS` | `true` | Enable vector search in MongoDB |
+| `DOC_PARSER_EMBEDDINGS_URL` | `http://localhost:11434/api/generate` | Full embeddings endpoint URL (must include path) |
 | `DOC_PARSER_EMBEDDINGS_MODEL` | `nomic-embed-text` | Embeddings model name |
 | `DOC_PARSER_WEBHOOK_URL` | `` | Webhook URL for job notifications |
 
@@ -226,16 +238,25 @@ See `config.py` for the full list of available settings.
 
 ## Async Job Processing
 
-Processamento assíncrono usando Celery, Redis e MongoDB para jobs longos (PDFs com OCR).
+Asynchronous processing uses Celery + Redis + MongoDB, designed for large OCR-heavy PDFs.
+
+### Components
+
+- `doc-parser` (FastAPI): receives files and creates jobs
+- `celery-worker`: processes jobs and generates embeddings
+- `redis`: broker/backend for Celery
+- `mongodb`: persists jobs, documents, chunks, and embeddings
+- embeddings service (external container), e.g. `llama_cpp_vulkan`
 
 ### Endpoints de Jobs
 
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
-| POST | `/jobs` | Criar novo job de processamento |
+| POST | `/jobs/` | Criar novo job de processamento |
 | GET | `/jobs/{job_id}` | Obter status e resultado |
 | DELETE | `/jobs/{job_id}` | Cancelar job pendente |
 | GET | `/jobs` | Listar jobs (debug) |
+| POST | `/jobs/{job_id}/webhook` | Registrar webhook para job |
 
 ### Busca Semântica
 
@@ -249,7 +270,7 @@ Processamento assíncrono usando Celery, Redis e MongoDB para jobs longos (PDFs 
 #### Criar Job
 
 ```bash
-curl -X POST http://localhost:8000/jobs \
+curl -X POST http://localhost:8000/jobs/ \
   -F "file=@document.pdf" \
   -F "generate_embeddings=true"
 ```
@@ -335,29 +356,47 @@ curl -X POST http://localhost:8000/search/semantic \
 }
 ```
 
-### Iniciar Celery Workers
+### Start API + Worker with local `.venv`
 
 ```bash
-# Iniciar workers (modo solo para debug)
-python scripts/celery_worker.py worker --workers 2
+# Start infrastructure
+docker compose up -d redis mongodb
 
-# Iniciar com monitoramento Flower
-python scripts/celery_worker.py worker --workers 4 --with-flower
+# Start worker (use local venv to guarantee ROCm torch)
+C_FORCE_ROOT=true DOC_PARSER_USE_GPU=true .venv/bin/celery -A src.celery_worker worker \
+  --loglevel=info --concurrency=2 --pool=solo --without-gossip --without-mingle --without-heartbeat
 
-# Acessar Flower: http://localhost:5555
+# Start API (same local venv)
+DOC_PARSER_USE_GPU=true .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 ```
 
-### Iniciar com Docker
+### E2E async + semantic smoke test
+
+```bash
+python scripts/test_e2e_async_semantic.py
+```
+
+The script will:
+1. Upload `resource/1008086-69.2016.8.26.0005.pdf` to `/jobs/`
+2. Poll status until `completed`
+3. Execute `/search/semantic`
+4. Validate the processed `doc_id` exists in search results
+
+### Start with Docker
 
 ```bash
 docker compose up --build
 
-# Iniciar workers separadamente
+# Start infra only
 docker compose up redis mongodb
 
-# Iniciar workers em background
+# Start worker manually
 celery -A src.celery_worker worker --loglevel=info --concurrency=2 -Q default
 ```
+
+> If your embeddings provider runs in another container, set `DOC_PARSER_EMBEDDINGS_URL`
+> to the full endpoint, for example:
+> `http://localhost:8081/v1/embeddings`.
 
 ## Architecture
 
@@ -368,8 +407,14 @@ doc_parser/
 │   ├── dependencies.py           # Dependency injection
 │   ├── schemas.py                # API request/response schemas
 │   └── routers/
-│       └── process.py            # API endpoints
+│       ├── process.py            # Synchronous processing endpoints
+│       ├── async_jobs.py         # Asynchronous jobs endpoints
+│       ├── semantic_search.py    # Semantic search endpoints
+│       └── webhooks.py           # Webhook endpoints
 ├── src/                          # Core processing pipeline
+│   ├── celery_worker.py          # Celery tasks and workers
+│   ├── database.py               # MongoDB persistence layer
+│   ├── embeddings.py             # Embeddings client and helpers
 │   ├── pipeline.py               # Main orchestrator (sequential + parallel)
 │   ├── detector.py               # Page type detection (digital/scan/hybrid)
 │   ├── extractors/
@@ -377,10 +422,14 @@ doc_parser/
 │   │   ├── ocr.py                # OCR with docTR (PyTorch)
 │   │   ├── ocr_tesseract.py      # OCR with Tesseract (LSTM)
 │   │   └── tables.py             # Table extraction (camelot)
+│   ├── search/
+│   │   ├── chunker.py            # Chunk generation for embeddings
+│   │   └── vector_store.py       # Vector retrieval utilities
 │   ├── preprocessing/
 │   │   └── image_enhancer.py     # Image preprocessing for OCR
 │   ├── models/
-│   │   └── schemas.py            # Pydantic data models
+│   │   ├── mongodb.py            # MongoDB/Celery-related schemas
+│   │   └── schemas.py            # Pipeline document schemas
 │   ├── exporters/
 │   │   └── searchable_pdf.py     # Searchable PDF generation
 │   └── utils/
@@ -389,12 +438,19 @@ doc_parser/
 │       └── ocr_postprocess.py    # OCR text post-processing
 ├── scripts/
 │   ├── process_single.py         # CLI for single PDF processing
-│   └── check_setup.py            # Environment verification
+│   ├── celery_worker.py          # Celery helper CLI
+│   ├── llm_postprocess.py        # LLM post-processing helper
+│   └── test_e2e_async_semantic.py# E2E smoke test script
 ├── tests/
 │   ├── conftest.py               # Shared test fixtures
 │   ├── test_api.py               # API endpoint tests
 │   ├── test_config.py            # Configuration tests
-│   └── test_searchable_pdf.py    # Searchable PDF tests
+│   ├── test_async_jobs.py        # Async jobs and webhook tests
+│   ├── test_celery_worker.py     # Celery worker task tests
+│   ├── test_database.py          # MongoDB/data layer tests
+│   ├── test_embeddings.py        # Embeddings integration tests
+│   ├── test_chunker.py           # Chunking tests
+│   └── test_vector_store.py      # Vector store tests
 ├── config.py                     # Global configuration
 ├── pyproject.toml                # Dependencies, build config, tool settings
 ├── Dockerfile                    # Docker image (ROCm)
@@ -412,6 +468,9 @@ pytest -v
 
 # Run a specific test module
 pytest tests/test_api.py
+
+# Run E2E async + semantic smoke test (requires API/worker/services up)
+python scripts/test_e2e_async_semantic.py
 ```
 
 ## Docker
