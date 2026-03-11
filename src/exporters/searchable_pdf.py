@@ -36,6 +36,9 @@ def _create_text_overlay(
     according to individual line bounding boxes (when available)
     or uniformly distributed within the block bbox (fallback).
 
+    Table blocks with ``rows`` data are serialised per-row so that
+    each cell value is individually searchable.
+
     Args:
         page: Page object with blocks and normalized bboxes (0-1).
         page_width_pts: page width in PDF points.
@@ -48,6 +51,10 @@ def _create_text_overlay(
     c = Canvas(buf, pagesize=(page_width_pts, page_height_pts))
 
     for block in page.blocks:
+        if block.rows:
+            _render_table_block(c, block, page_width_pts, page_height_pts)
+            continue
+
         if not block.text:
             continue
 
@@ -162,6 +169,53 @@ def _render_block_fallback(
             line_y1 / page_height_pts,
             bx2 / page_width_pts,
             line_y2 / page_height_pts,
+        ]
+
+        _render_line(canvas, text, line_bbox, page_width_pts, page_height_pts)
+
+
+def _render_table_block(
+    canvas: Canvas, block, page_width_pts: float, page_height_pts: float
+) -> None:
+    """
+    Render a table block using row/cell data.
+
+    Each row becomes a single invisible text line with cells joined
+    by " | ", distributed vertically within the block bbox.
+    """
+    rows = block.rows
+    if not rows:
+        return
+
+    abs_bbox = denormalize_bbox(block.bbox, page_width_pts, page_height_pts)
+    bx1, by1, bx2, by2 = abs_bbox
+    block_width = bx2 - bx1
+    block_height = by2 - by1
+
+    if block_width <= 0 or block_height <= 0:
+        return
+
+    text_rows = []
+    for row in rows:
+        row_text = " | ".join(cell for cell in row if cell)
+        if row_text.strip():
+            text_rows.append(row_text)
+
+    if not text_rows:
+        return
+
+    n_rows = len(text_rows)
+    row_height = block_height / n_rows
+
+    for i, text in enumerate(text_rows):
+        row_y1 = by1 + i * row_height
+        row_y2 = row_y1 + row_height
+
+        line_bbox = [
+            bx1 / page_width_pts,
+            row_y1 / page_height_pts,
+            bx2 / page_width_pts,
+            row_y2 / page_height_pts,
         ]
 
         _render_line(canvas, text, line_bbox, page_width_pts, page_height_pts)

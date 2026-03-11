@@ -12,8 +12,8 @@
                                                           │
                                                           ▼
 ┌─────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Cliente   │◀────│    API       │     │  ChromaDB    │◀────│  Serviço     │
-│  (Consulta) │     │  de Consulta │     │  (Vetores)   │     │  de Embedding│
+│   Cliente   │◀────│    API       │     │  ChromaDB    │◀────│  Embedding   │
+│  (Consulta) │     │  de Consulta │     │  (Vetores)   │     │  (externo)   │
 └─────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
 ```
 
@@ -94,37 +94,42 @@ class TextChunk:
 
 ---
 
-## 4. Serviço de Embedding
+## 4. Serviço de Embedding (externo)
 
-### 4.1 Endpoints
+O serviço de embedding roda em um servidor dedicado separado (llama.cpp servindo API compatível com OpenAI).
+A aplicação consome esse serviço via `EMBEDDING_API_URL`.
+
+### 4.1 Endpoints consumidos
 
 | Endpoint | Método | Descrição |
 |----------|--------|-----------|
-| `/embed` | POST | Gera embedding para texto único |
-| `/batch-embed` | POST | Gera embeddings para múltiplos textos |
+| `/v1/embeddings` | POST | Gera embeddings (padrão OpenAI) |
 | `/health` | GET | Health check |
-| `/models` | GET | Lista modelos disponíveis |
 
 ### 4.2 Request/Response Schema
 
-**Request:**
+**Request (padrão OpenAI /v1/embeddings):**
 ```json
 {
-    "texts": ["string"],
-    "model": "text-embedding-ada-002",
-    "dimensions": 1536
+    "input": ["string"],
+    "model": "model-name"
 }
 ```
 
 **Response:**
 ```json
 {
-    "embeddings": [[float]],
+    "data": [
+        {
+            "embedding": [float],
+            "index": 0
+        }
+    ],
     "usage": {
         "prompt_tokens": 123,
         "total_tokens": 123
     },
-    "model": "text-embedding-ada-002"
+    "model": "model-name"
 }
 ```
 
@@ -132,9 +137,9 @@ class TextChunk:
 
 | Modelo | Dimensões | Custo | Latência | Uso |
 |--------|-----------|-------|----------|-----|
-| OpenAI Ada-002 | 1536 | Pago | ~100ms | Alta qualidade |
-| MiniLM-L6-v2 | 384 | Gratuito | ~50ms | Self-hosted |
-| Cohere Embed | 1024 | Pago | ~80ms | Multilíngue |
+| GGUF local (llama.cpp) | Variável | Gratuito | ~50ms | Self-hosted, principal |
+| OpenAI Ada-002 | 1536 | Pago | ~100ms | Alternativa cloud |
+| Cohere Embed | 1024 | Pago | ~80ms | Alternativa multilíngue |
 
 ---
 
@@ -196,10 +201,11 @@ collection.delete(where={"job_id": job_id})
 
 ### 5.4 Persistência
 
+Configurado via variáveis de ambiente no container Docker (`IS_PERSISTENT=TRUE`, `ANONYMIZED_TELEMETRY=FALSE`).
+Dados persistidos no volume `chroma_data:/chroma/chroma`.
+
 ```yaml
 chroma_config:
-  persist_directory: "./chroma_db"
-  anonymized_telemetry: false
   tenant: default_tenant
   database: default_database
 ```
@@ -327,11 +333,7 @@ flower = "^2.0.0"
 # ChromaDB
 chromadb = "^0.4.0"
 
-# Embeddings
-openai = "^1.0.0"
-sentence-transformers = "^2.2.0"
-
-# HTTP Clients
+# HTTP Clients (chamadas ao serviço de embedding via API OpenAI-compatible)
 httpx = "^0.26.0"
 websockets = "^12.0"
 
@@ -348,18 +350,15 @@ services:
     image: redis:7-alpine
     ports: ["6379:6379"]
     volumes: ["redis_data:/data"]
-  
+
   chromadb:
     image: chromadb/chroma:latest
     ports: ["8000:8000"]
     volumes: ["chroma_data:/chroma/chroma"]
-  
-  embedding-service:
-    build: ./services/embedding
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MODEL_NAME=text-embedding-ada-002
-  
+      - ANONYMIZED_TELEMETRY=FALSE
+      - IS_PERSISTENT=TRUE
+
   worker:
     build: ./app
     command: celery -A app.celery worker -Q processing --loglevel=info
@@ -369,15 +368,17 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - CHROMA_HOST=http://chromadb:8000
-  
+      - EMBEDDING_API_URL=${EMBEDDING_API_URL}
+
   api:
     build: ./app
     ports: ["8000:8000"]
     depends_on:
       - redis
       - chromadb
-      - embedding-service
-  
+    environment:
+      - EMBEDDING_API_URL=${EMBEDDING_API_URL}
+
   flower:
     build: ./app
     command: celery -A app.celery flower --port=5555
@@ -444,7 +445,7 @@ services:
 
 ### Semana 1: Preparação
 
-1. [ ] Criar repositório para serviço de embedding
+1. [ ] Validar conectividade com serviço externo de embedding (llama.cpp)
 2. [ ] Configurar Docker Compose com Redis e ChromaDB
 3. [ ] Definir schema de metadados do ChromaDB
 4. [ ] Criar testes unitários para cada componente
@@ -476,10 +477,10 @@ services:
 
 | Risco | Impacto | Mitigação |
 |-------|---------|-----------|
-| Falha no serviço de embedding | Alto | Cache local, fallback para modelo gratuito |
+| Falha no serviço de embedding | Alto | Retry logic, alerta ao admin do servidor externo, circuit breaker |
 | ChromaDB indisponível | Médio | Retry logic, fila de espera |
 | Volume excessivo de jobs | Médio | Rate limiting, filas prioritárias |
-| Custos de API de embedding | Alto | Caching de embeddings, batch processing |
+| Indisponibilidade do servidor externo de embedding | Médio | Health check periódico, caching de embeddings, retry com backoff |
 | Tempo de processamento longo | Médio | Progress tracking, timeout configurável |
 
 ---
@@ -492,7 +493,7 @@ services:
 | Taxa de sucesso | > 99% | Status dos jobs |
 | Latência de busca | < 200ms | Timing da API |
 | Uptime do sistema | > 99.5% | Monitoring |
-| Custo por documento | < $0.10 | Billing reports |
+| Custo por documento | Self-hosted | Monitoramento de recursos |
 
 ---
 
@@ -509,6 +510,7 @@ services:
 
 ---
 
-*Documento criado: 2024-01-15*  
-*Versão: 1.0*  
+*Documento criado: 2024-01-15*
+*Última atualização: 2026-03-11*
+*Versão: 1.1*
 *Status: Planejamento*
