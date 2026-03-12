@@ -2,14 +2,28 @@
 In-memory job store for minimal persistence.
 
 Thread-safe via a lock; suitable for single-process deployments.
-Replace with Redis-backed store when scaling to multiple workers.
+Use create_store() to pick the right backend (memory vs Redis) at runtime.
 """
+
+from __future__ import annotations
 
 import threading
 import uuid
 from datetime import datetime
+from typing import cast
 
 from services.ingest_api.schemas import Job, JobStatus
+
+
+def create_store() -> JobStore:
+    """Return a JobStore or RedisJobStore depending on REDIS_URL config."""
+    import config
+
+    if config.REDIS_URL:
+        from services.ingest_api.redis_store import RedisJobStore
+
+        return cast(JobStore, RedisJobStore.from_url(config.REDIS_URL))
+    return JobStore()
 
 
 class JobStore:

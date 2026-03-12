@@ -1,20 +1,19 @@
 # =============================================================================
-# Doc Parser API — Docker image with ROCm support (AMD GPU)
+# Doc Parser — single image for API, UI, and worker
 #
-# Base: Official AMD PyTorch with ROCm 7.2 (supports gfx1100 / RX 7900 XT)
-# Workers = 1 because the OCR model is loaded once on the GPU;
-# multiple workers would duplicate the model and waste VRAM.
+# Base: Official AMD PyTorch with ROCm 7.2 (gfx1100 / RX 7900 XT)
+#
+# This image is used by both the `api` and `worker` services defined in
+# docker-compose.services.yml — the CMD is overridden per service.
+#
+# Build:  docker compose -f docker-compose.services.yml build
 # =============================================================================
 
 FROM rocm/pytorch:rocm7.2_ubuntu24.04_py3.12_pytorch_release_2.7.1
 
 WORKDIR /app
 
-# System dependencies
-# poppler-utils: pdf2image (pdftopm)
-# tesseract-ocr + tesseract-ocr-por: Tesseract OCR (optional)
-# ghostscript: camelot-py dependency
-# libgl1-mesa-glx + libglib2.0-0: OpenCV headless
+# System dependencies (poppler, tesseract, ghostscript, opencv)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
     tesseract-ocr \
@@ -24,9 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Python dependencies (torch is already in the base image — do NOT reinstall)
-# Deps are declared in pyproject.toml [project.dependencies]; extracted here
-# to preserve Docker layer caching (this layer rebuilds only when deps change).
+# Python dependencies (torch already in base image — do NOT reinstall)
 COPY pyproject.toml .
 RUN python3 -c "\
 import tomllib, subprocess, sys; \
@@ -37,13 +34,14 @@ subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir']
 COPY config.py .
 COPY app/ app/
 COPY src/ src/
+COPY services/ services/
 
-# API port
-EXPOSE 8000
+RUN mkdir -p /app/uploads /app/output
+VOLUME ["/app/uploads", "/app/output"]
 
-# Healthcheck
+EXPOSE 8080
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import httpx; r = httpx.get('http://localhost:8000/health'); r.raise_for_status()" || exit 1
+    CMD python -c "import httpx; r = httpx.get('http://localhost:8080/api/jobs/healthcheck'); print('ok')" || exit 1
 
-# Uvicorn with 1 worker (GPU shared via internal semaphore)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["uvicorn", "services.app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]

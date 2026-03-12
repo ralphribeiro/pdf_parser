@@ -153,3 +153,54 @@ class TestWorkerRunner:
         elapsed = time.monotonic() - start
 
         assert elapsed < 0.5
+
+
+# =========================================================================
+# Cycle D3: Worker standalone — main() entrypoint
+# =========================================================================
+
+
+class TestWorkerMain:
+    """main() should create a real worker from store factory and run the loop."""
+
+    def test_main_calls_run_loop(self, monkeypatch, tmp_path):
+        from services.worker import run as run_module
+
+        import config
+
+        monkeypatch.setattr(config, "REDIS_URL", "")
+
+        calls = []
+
+        def fake_run_loop(worker, **kwargs):
+            calls.append(worker)
+
+        monkeypatch.setattr(run_module, "run_loop", fake_run_loop)
+        monkeypatch.setenv("DOC_PARSER_UPLOAD_DIR", str(tmp_path / "up"))
+        monkeypatch.setenv("DOC_PARSER_OUTPUT_DIR", str(tmp_path / "out"))
+
+        run_module.main()
+
+        assert len(calls) == 1
+
+    def test_main_creates_worker_with_store(self, monkeypatch, tmp_path):
+        from services.worker import run as run_module
+
+        import config
+
+        monkeypatch.setattr(config, "REDIS_URL", "")
+
+        captured = {}
+
+        def fake_run_loop(worker, **kwargs):
+            captured["worker"] = worker
+
+        monkeypatch.setattr(run_module, "run_loop", fake_run_loop)
+        monkeypatch.setenv("DOC_PARSER_UPLOAD_DIR", str(tmp_path / "up"))
+        monkeypatch.setenv("DOC_PARSER_OUTPUT_DIR", str(tmp_path / "out"))
+
+        run_module.main()
+
+        from services.worker.ocr_worker import OcrWorker
+
+        assert isinstance(captured["worker"], OcrWorker)

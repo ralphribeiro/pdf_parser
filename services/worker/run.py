@@ -1,14 +1,17 @@
 """
 Worker runner: polls for queued jobs and processes them.
 
-Can be used standalone (``python -m services.worker.run``) or
-called from the combined app as a background thread.
+Run standalone::
+
+    python -m services.worker.run
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -33,3 +36,30 @@ def run_loop(
         if not processed:
             time.sleep(interval)
         count += 1
+
+
+def main() -> None:
+    """Bootstrap a standalone worker process using the store factory."""
+    from services.ingest_api.store import create_store
+    from services.worker.ocr_worker import OcrWorker
+
+    store = create_store()
+
+    upload_dir = Path(os.getenv("DOC_PARSER_UPLOAD_DIR", "uploads"))
+    output_dir = Path(os.getenv("DOC_PARSER_OUTPUT_DIR", "output"))
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    worker = OcrWorker(
+        store=store,
+        upload_dir=upload_dir,
+        output_dir=output_dir,
+    )
+
+    logger.info("Worker started (store=%s)", type(store).__name__)
+    run_loop(worker)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    main()
