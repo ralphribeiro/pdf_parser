@@ -83,7 +83,10 @@ def _artifact_with_document(pdf_path, output_dir, **kwargs):
                     Block(
                         block_id="p1_b1",
                         type=BlockType.PARAGRAPH,
-                        text="contrato de locacao com vencimento",
+                        text=(
+                            "contrato de locacao com vencimento e clausulas "
+                            "de multa por inadimplemento contratual"
+                        ),
                         bbox=[0.0, 0.0, 1.0, 1.0],
                         confidence=0.99,
                     )

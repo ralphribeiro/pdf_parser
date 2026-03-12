@@ -51,7 +51,10 @@ class ChromaVectorStore:
         host = parsed.hostname or parsed.path or "localhost"
         port = parsed.port or 8000
         client = chromadb.HttpClient(host=host, port=port)
-        collection = client.get_or_create_collection(name=collection_name)
+        collection = client.get_or_create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"},
+        )
         return cls(collection=collection)
 
     def upsert_chunks(

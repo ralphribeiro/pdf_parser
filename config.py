@@ -190,9 +190,11 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL") or os.getenv(
 _embedding_timeout_raw = (
     os.getenv("EMBEDDING_TIMEOUT_SECONDS")
     or os.getenv("DOC_PARSER_EMBEDDING_TIMEOUT_SECONDS")
-    or "10"
+    or "120"
 )
 EMBEDDING_TIMEOUT_SECONDS = float(_embedding_timeout_raw)
+
+EMBEDDING_BATCH_SIZE = _env_int("DOC_PARSER_EMBEDDING_BATCH_SIZE", 32)
 
 # ---------------------------------------------------------------------------
 # Logging

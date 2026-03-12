@@ -76,6 +76,37 @@ class TestEmbeddingClient:
         with pytest.raises(RuntimeError, match="Malformed embedding response"):
             client.embed_texts(["x"])
 
+    def test_batching_splits_large_input(self):
+        """When texts exceed batch_size, multiple API calls are made."""
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            import json
+
+            body = json.loads(request.read())
+            n = len(body["input"])
+            data = [{"index": i, "embedding": [float(i)]} for i in range(n)]
+            return httpx.Response(200, json={"data": data})
+
+        transport = httpx.MockTransport(handler)
+        http = httpx.Client(transport=transport, base_url="http://embed.local")
+        from services.search.embedding_client import EmbeddingClient
+
+        client = EmbeddingClient(
+            base_url="http://embed.local",
+            model="test",
+            batch_size=3,
+            http_client=http,
+        )
+
+        texts = [f"text_{i}" for i in range(7)]
+        vectors = client.embed_texts(texts)
+
+        assert len(vectors) == 7
+        assert call_count == 3  # ceil(7/3) = 3 batches
+
     def test_healthcheck_true_on_200(self):
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path == "/health":

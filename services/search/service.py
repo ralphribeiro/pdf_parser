@@ -4,6 +4,8 @@ High-level semantic indexing and query orchestration.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -27,6 +29,40 @@ class VectorStoreProtocol(Protocol):
         job_id: str | None = None,
         min_similarity: float | None = None,
     ) -> list[SearchResult]: ...
+
+
+_TOKEN_RE = re.compile(r"[a-z0-9]{4,}")
+
+
+def _normalize(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch)).lower()
+
+
+def _keyword_tokens(text: str) -> set[str]:
+    return set(_TOKEN_RE.findall(_normalize(text)))
+
+
+def _token_prefixes(tokens: set[str]) -> set[str]:
+    return {token[:4] for token in tokens if len(token) >= 4}
+
+
+def _keyword_filter(query: str, results: list[SearchResult]) -> list[SearchResult]:
+    """Keep only results sharing at least one query keyword token."""
+    query_tokens = _keyword_tokens(query)
+    if not query_tokens:
+        return results
+    query_prefixes = _token_prefixes(query_tokens)
+    required_prefix_matches = 1 if len(query_prefixes) == 1 else 2
+
+    filtered: list[SearchResult] = []
+    for item in results:
+        text_tokens = _keyword_tokens(item.text)
+        exact_overlap = text_tokens & query_tokens
+        prefix_overlap = _token_prefixes(text_tokens) & query_prefixes
+        if exact_overlap or len(prefix_overlap) >= required_prefix_matches:
+            filtered.append(item)
+    return filtered
 
 
 @dataclass
@@ -60,9 +96,10 @@ class SemanticSearchService:
         query_embedding = self.embedding_client.embed_query(  # pylint: disable=assignment-from-no-return
             query
         )
-        return self.vector_store.query(
+        raw_results = self.vector_store.query(  # pylint: disable=assignment-from-no-return
             query_embedding=query_embedding,
             n_results=n_results,
             job_id=job_id,
             min_similarity=min_similarity,
         )
+        return _keyword_filter(query=query, results=raw_results)

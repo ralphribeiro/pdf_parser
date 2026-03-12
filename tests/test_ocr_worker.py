@@ -272,7 +272,8 @@ class TestOcrWorkerProcessJob:
         args = indexer.index_document.call_args.args
         assert args[0] == job.job_id
 
-    def test_index_error_sets_failed(self, tmp_path):
+    def test_index_error_is_nonfatal(self, tmp_path):
+        """Indexing failure must not prevent job UPLOADED."""
         store = JobStore()
         indexer = MagicMock()
         indexer.index_document.side_effect = RuntimeError("index backend down")
@@ -283,8 +284,7 @@ class TestOcrWorkerProcessJob:
 
         final = store.get(job.job_id)
         assert final is not None
-        assert final.status == JobStatus.FAILED
-        assert "index backend down" in (final.error_message or "")
+        assert final.status == JobStatus.UPLOADED
 
 
 # =========================================================================

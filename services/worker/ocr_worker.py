@@ -68,11 +68,6 @@ class OcrWorker:
 
         try:
             artifacts = self._artifact_fn(pdf_path, self.output_dir)
-            if self.semantic_indexer is not None:
-                self.semantic_indexer.index_document(job_id, artifacts.document)
-
-            self.store.update_status(job_id, JobStatus.UPLOADED)
-            logger.info("Job %s completed", job_id)
         except Exception:
             logger.exception("Job %s failed", job_id)
             self.store.update_status(
@@ -80,6 +75,17 @@ class OcrWorker:
                 JobStatus.FAILED,
                 error_message=traceback.format_exc(),
             )
+            return
+
+        if self.semantic_indexer is not None:
+            try:
+                n = self.semantic_indexer.index_document(job_id, artifacts.document)
+                logger.info("Job %s: indexed %d chunks", job_id, n)
+            except Exception:
+                logger.exception("Job %s: semantic indexing failed (non-fatal)", job_id)
+
+        self.store.update_status(job_id, JobStatus.UPLOADED)
+        logger.info("Job %s completed", job_id)
 
     def process_next(self) -> bool:
         """Find and process the next queued job. Returns True if one was processed."""
