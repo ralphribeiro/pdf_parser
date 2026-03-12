@@ -32,7 +32,6 @@ subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir']
 
 # Application code
 COPY config.py .
-COPY app/ app/
 COPY src/ src/
 COPY services/ services/
 

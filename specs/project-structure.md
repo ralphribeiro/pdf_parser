@@ -8,12 +8,12 @@ Este é um pipeline de processamento de documentos PDF para extração de texto 
 
 ```
 doc_parser/
-├── app/                          # FastAPI application
-│   ├── main.py                   # App factory e lifespan
-│   ├── dependencies.py           # Injeção de dependências
-│   ├── schemas.py                # Esquemas de requisição/resposta da API
-│   └── routers/
-│       └── process.py            # Endpoints da API
+├── services/                     # API assíncrona, UI, worker, search
+│   ├── app.py                    # App factory combinada (API + UI)
+│   ├── ingest_api/               # API de jobs (/api/jobs, /api/search)
+│   ├── ingest_ui/                # UI de upload e status (/, /jobs/{id})
+│   ├── worker/                   # Worker OCR polling Redis
+│   └── search/                   # Busca semântica (ChromaDB + embeddings)
 ├── src/                          # Pipeline de processamento principal
 │   ├── pipeline.py               # Orquestrador principal (sequencial + paralela)
 │   ├── detector.py               # Detecção de tipo de página (digital/scan/hybrid)
@@ -37,12 +37,8 @@ doc_parser/
 │   └── llm_postprocess.py        # Pós-processamento de OCR via LLM (Ollama)
 ├── config.py                     # Configuração global
 ├── pyproject.toml                # Dependências e configurações
-├── docker-compose.yml            # Docker Compose
-└── tests/
-    ├── conftest.py               # Fixtures de teste compartilhados
-    ├── test_api.py               # Testes de endpoints da API
-    ├── test_config.py            # Testes de configuração
-    └── test_searchable_pdf.py    # Testes de PDF pesquisável
+├── docker-compose.services.yml   # Docker Compose (Redis + ChromaDB + API + Worker)
+└── tests/                        # Suite de testes
 ```
 
 ## Funcionalidades Principais
@@ -108,20 +104,19 @@ cp .env.example .env
 ### Docker (recomendado)
 
 ```bash
-docker compose up --build
-
-# Processar um PDF
-curl -X POST http://localhost:8000/process \
-  -F "file=@document.pdf" \
-  -o result.json
-
-# Obter PDF pesquisável
-curl -X POST "http://localhost:8000/process?response_format=pdf" \
-  -F "file=@document.pdf" \
-  -o searchable.pdf
+docker compose -f docker-compose.services.yml up --build -d
 
 # Health check
-curl http://localhost:8000/health
+curl http://localhost:8090/api/jobs/healthcheck
+
+# Criar job assíncrono
+curl -sS -X POST http://localhost:8090/api/jobs \
+  -F "file=@document.pdf;type=application/pdf" | jq
+
+# Busca semântica
+curl -sS -X POST http://localhost:8090/api/search \
+  -H "content-type: application/json" \
+  -d '{"query":"contrato de locacao","n_results":5}' | jq
 ```
 
 ### Instalação Local
@@ -144,29 +139,21 @@ pip install ".[dev]"  # Dev tools (linting, testing)
 
 ```bash
 # Iniciar servidor
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+uvicorn services.app:app --host 0.0.0.0 --port 8080 --workers 1
 
 # Nota: Use --workers 1 porque o modelo OCR é carregado uma vez na GPU
 ```
 
 #### Endpoints
 
-| Método | Endpoint   | Descrição |
-|--------|------------|-----------|
-| POST   | `/process` | Processar PDF e retornar JSON ou PDF pesquisável |
-| GET    | `/health`  | Check de saúde (status, GPU, motor OCR) |
-| GET    | `/info`    | Configuração atual do pipeline |
-
-#### Parâmetros de `/process`
-
-| Parâmetro | Tipo | Padrão | Descrição |
-|-----------|------|--------|-----------|
-| `file` | file | required | PDF a processar |
-| `response_format` | string | `json` | `json` ou `pdf` |
-| `extract_tables` | bool | `true` | Habilitar extração de tabelas |
-| `min_confidence` | float | — | Confiança mínima OCR (0.0–1.0) |
-| `ocr_postprocess` | bool | — | Habilitar pós-processamento OCR |
-| `ocr_fix_errors` | bool | — | Corrigir erros comuns OCR |
+| Método | Endpoint               | Descrição |
+|--------|------------------------|-----------|
+| POST   | `/api/jobs`            | Upload de PDF e criação de job |
+| GET    | `/api/jobs/{job_id}`   | Status do job |
+| GET    | `/api/jobs/healthcheck`| Health check da API |
+| POST   | `/api/search`          | Busca semântica sobre chunks indexados |
+| GET    | `/`                    | UI de upload |
+| GET    | `/jobs/{job_id}`       | UI de status do job |
 
 ### CLI
 
@@ -284,15 +271,7 @@ pytest
 
 # Rodar com saída verbosa
 pytest -v
-
-# Rodar módulo específico
-pytest tests/test_api.py
 ```
-
-### Test Coverage
-- 130 testes passando
-- Testes de API, configuração, PDF pesquisável
-- Abordagem TDD - testes escritos antes da implementação
 
 ## Limitações Atuais
 
@@ -338,7 +317,7 @@ Reply with "TDD MODE ACTIVATED" if you understand and agree to these terms. Let'
 
 ```bash
 # Docker build
-docker compose build
+docker compose -f docker-compose.services.yml build
 
 # Local install (with ROCm GPU support)
 pip install --index-url https://download.pytorch.org/whl/rocm7.0 ".[torch-rocm]"
@@ -351,9 +330,9 @@ pip install .
 
 ```bash
 # Run all linters
-ruff check src app tests scripts
-pylint src app tests scripts
-mypy src app
+ruff check src services tests scripts
+pylint src services tests scripts
+mypy src services
 
 # Pre-commit hooks
 pre-commit run --all-files
@@ -368,14 +347,8 @@ pytest
 # Run with verbose output
 pytest -v
 
-# Run specific test file
-pytest tests/test_api.py
-
 # Run with coverage
 pytest --cov=src --cov-report=html
-
-# Run single test
-pytest tests/test_api.py::TestProcessJsonEndpoint::test_returns_200_with_valid_pdf -v
 ```
 
 ## Git Hooks

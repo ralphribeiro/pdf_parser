@@ -43,15 +43,6 @@ curl -sS -X POST http://localhost:8090/api/search \
   -d "{\"query\":\"contrato de locacao\",\"n_results\":5,\"filters\":{\"job_id\":\"$JOB_ID\"}}" | jq
 ```
 
-### Legacy API (sync `/process`)
-
-If you still use the old synchronous API (`app/main.py`), keep using:
-
-```bash
-docker compose up --build
-curl -X POST http://localhost:8000/process -F "file=@document.pdf"
-```
-
 ### Local Installation
 
 #### Prerequisites
@@ -89,15 +80,15 @@ pip install ".[dev]"
 
 ### REST API
 
-#### Async services API (current)
-
 Start the combined app:
 
 ```bash
 uvicorn services.app:app --host 0.0.0.0 --port 8080 --workers 1
 ```
 
-#### Async endpoints (`services/*`)
+> Note: use `--workers 1` when OCR model is GPU-loaded to avoid duplicated VRAM usage.
+
+#### Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -120,35 +111,6 @@ curl -X POST http://localhost:8080/api/search \
     "min_similarity": 0.7
   }'
 ```
-
-#### Legacy sync API (`app/*`)
-
-Start legacy server:
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
-```
-
-> Note: use `--workers 1` when OCR model is GPU-loaded to avoid duplicated VRAM usage.
-
-Legacy endpoints:
-
-| Method | Endpoint   | Description                               |
-|--------|------------|-------------------------------------------|
-| POST   | `/process` | Process a PDF and return JSON or searchable PDF |
-| GET    | `/health`  | Service health check (status, GPU, OCR engine) |
-| GET    | `/info`    | Current pipeline configuration             |
-
-#### `POST /process` Parameters
-
-| Parameter        | Type   | Default | Description                          |
-|------------------|--------|---------|--------------------------------------|
-| `file`           | file   | required | PDF file to process                 |
-| `response_format`| string | `json`  | `json` or `pdf` (searchable PDF)    |
-| `extract_tables` | bool   | `true`  | Enable table extraction              |
-| `min_confidence` | float  | —       | Minimum OCR confidence (0.0–1.0)    |
-| `ocr_postprocess`| bool   | —       | Enable OCR text post-processing     |
-| `ocr_fix_errors` | bool   | —       | Fix common OCR errors               |
 
 ### CLI
 
@@ -275,12 +237,12 @@ See `config.py` for the full list of available settings.
 
 ```
 doc_parser/
-├── app/                          # FastAPI application
-│   ├── main.py                   # App factory and lifespan
-│   ├── dependencies.py           # Dependency injection
-│   ├── schemas.py                # API request/response schemas
-│   └── routers/
-│       └── process.py            # API endpoints
+├── services/                     # Async API, UI, worker, search
+│   ├── app.py                    # Combined FastAPI app factory
+│   ├── ingest_api/               # Job queue API (/api/jobs, /api/search)
+│   ├── ingest_ui/                # Upload & status UI (/, /jobs/{id})
+│   ├── worker/                   # OCR worker polling Redis
+│   └── search/                   # Semantic search (ChromaDB + embeddings)
 ├── src/                          # Core processing pipeline
 │   ├── pipeline.py               # Main orchestrator (sequential + parallel)
 │   ├── detector.py               # Page type detection (digital/scan/hybrid)
@@ -302,15 +264,11 @@ doc_parser/
 ├── scripts/
 │   ├── process_single.py         # CLI for single PDF processing
 │   └── check_setup.py            # Environment verification
-├── tests/
-│   ├── conftest.py               # Shared test fixtures
-│   ├── test_api.py               # API endpoint tests
-│   ├── test_config.py            # Configuration tests
-│   └── test_searchable_pdf.py    # Searchable PDF tests
+├── tests/                        # Test suite
 ├── config.py                     # Global configuration
 ├── pyproject.toml                # Dependencies, build config, tool settings
 ├── Dockerfile                    # Docker image (ROCm)
-└── docker-compose.yml            # Docker Compose setup
+└── docker-compose.services.yml   # Docker Compose (Redis + ChromaDB + API + Worker)
 ```
 
 ## Testing
@@ -321,9 +279,6 @@ pytest
 
 # Run with verbose output
 pytest -v
-
-# Run a specific test module
-pytest tests/test_api.py
 ```
 
 ## Docker
@@ -331,11 +286,7 @@ pytest tests/test_api.py
 The Docker image is based on the official AMD ROCm PyTorch image and includes all system dependencies.
 
 ```bash
-# Async stack (recommended)
 docker compose -f docker-compose.services.yml up --build
-
-# Legacy stack
-docker compose up --build
 
 # View logs
 docker compose -f docker-compose.services.yml logs -f
