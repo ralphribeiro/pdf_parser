@@ -1,9 +1,8 @@
 """
 Tests for the OCR worker and supporting extensions.
 
-Covers: Job schema extensions (file_hash), JobStore.get_next_queued,
-compute_file_hash, OcrWorker.process_job lifecycle, and
-OcrWorker.process_next queue consumption.
+Covers: Job schema extensions (file_hash, document_id), JobStore.get_next_queued,
+OcrWorker.process_job lifecycle, and OcrWorker.process_next queue consumption.
 """
 
 import sys
@@ -22,7 +21,7 @@ from services.ingest_api.store import JobStore
 
 
 class TestJobWorkerFields:
-    """The Job model must carry a file hash for idempotency."""
+    """The Job model must carry file_hash and document_id."""
 
     def test_has_file_hash(self):
         job = Job(
@@ -53,6 +52,25 @@ class TestJobWorkerFields:
         )
         data = job.model_dump()
         assert data["file_hash"] == "deadbeef"
+
+    def test_has_document_id(self):
+        job = Job(
+            job_id="j1",
+            filename="doc.pdf",
+            status=JobStatus.QUEUED,
+            created_at=datetime.now(),
+            document_id="abc123",
+        )
+        assert job.document_id == "abc123"
+
+    def test_document_id_defaults_none(self):
+        job = Job(
+            job_id="j1",
+            filename="doc.pdf",
+            status=JobStatus.QUEUED,
+            created_at=datetime.now(),
+        )
+        assert job.document_id is None
 
 
 # =========================================================================
@@ -99,44 +117,10 @@ class TestJobStoreQueue:
         assert updated is not None
         assert updated.file_hash == "sha256hex"
 
-
-# =========================================================================
-# Cycle W2b: compute_file_hash
-# =========================================================================
-
-
-class TestFileHash:
-    """Tests for compute_file_hash (SHA-256 for idempotency)."""
-
-    def test_returns_hex_string(self, tmp_path):
-        from services.worker.ocr_worker import compute_file_hash
-
-        f = tmp_path / "test.pdf"
-        f.write_bytes(b"%PDF-1.4 content")
-
-        h = compute_file_hash(f)
-        assert isinstance(h, str)
-        assert len(h) == 64
-
-    def test_same_content_same_hash(self, tmp_path):
-        from services.worker.ocr_worker import compute_file_hash
-
-        a = tmp_path / "a.pdf"
-        b = tmp_path / "b.pdf"
-        a.write_bytes(b"%PDF-1.4 identical")
-        b.write_bytes(b"%PDF-1.4 identical")
-
-        assert compute_file_hash(a) == compute_file_hash(b)
-
-    def test_different_content_different_hash(self, tmp_path):
-        from services.worker.ocr_worker import compute_file_hash
-
-        a = tmp_path / "a.pdf"
-        b = tmp_path / "b.pdf"
-        a.write_bytes(b"%PDF-1.4 content A")
-        b.write_bytes(b"%PDF-1.4 content B")
-
-        assert compute_file_hash(a) != compute_file_hash(b)
+    def test_create_with_document_id(self):
+        store = JobStore()
+        job = store.create("doc.pdf", document_id="mongo_doc_id")
+        assert job.document_id == "mongo_doc_id"
 
 
 # =========================================================================
@@ -231,18 +215,6 @@ class TestOcrWorkerProcessJob:
         assert final is not None
         assert final.status == JobStatus.UPLOADED
         assert final.completed_at is not None
-
-    def test_stores_file_hash(self, tmp_path):
-        store = JobStore()
-        worker = self._make_worker(store, tmp_path)
-        job = self._seed_job(store, worker.upload_dir)
-
-        worker.process_job(job.job_id)
-
-        final = store.get(job.job_id)
-        assert final is not None
-        assert final.file_hash is not None
-        assert len(final.file_hash) == 64
 
     def test_pipeline_error_sets_failed(self, tmp_path):
         store = JobStore()

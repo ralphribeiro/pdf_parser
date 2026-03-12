@@ -26,7 +26,7 @@ class VectorStoreProtocol(Protocol):
         query_embedding: list[float],
         n_results: int,
         *,
-        job_id: str | None = None,
+        document_id: str | None = None,
         min_similarity: float | None = None,
     ) -> list[SearchResult]: ...
 
@@ -72,9 +72,9 @@ class SemanticSearchService:
     embedding_client: EmbeddingClientProtocol
     vector_store: VectorStoreProtocol
 
-    def index_document(self, job_id: str, document) -> int:
+    def index_document(self, document_id: str, document) -> int:
         """Index all semantic chunks for one processed document."""
-        chunks = build_chunks(document=document, job_id=job_id)
+        chunks = build_chunks(document=document, document_id=document_id)
         if not chunks:
             return 0
         texts = [chunk.text for chunk in chunks]
@@ -89,7 +89,7 @@ class SemanticSearchService:
         query: str,
         *,
         n_results: int,
-        job_id: str | None = None,
+        document_id: str | None = None,
         min_similarity: float | None = None,
     ) -> list[SearchResult]:
         """Execute semantic query against vector store."""
@@ -99,7 +99,7 @@ class SemanticSearchService:
         raw_results = self.vector_store.query(  # pylint: disable=assignment-from-no-return
             query_embedding=query_embedding,
             n_results=n_results,
-            job_id=job_id,
+            document_id=document_id,
             min_similarity=min_similarity,
         )
         return _keyword_filter(query=query, results=raw_results)

@@ -28,7 +28,7 @@ def create_ui_app(
     if store is None:
         store = JobStore()
     if upload_dir is None:
-        upload_dir = Path("uploads")
+        upload_dir = Path("data")
 
     upload_dir.mkdir(parents=True, exist_ok=True)
 

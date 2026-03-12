@@ -35,8 +35,8 @@ COPY config.py .
 COPY src/ src/
 COPY services/ services/
 
-RUN mkdir -p /app/uploads /app/output
-VOLUME ["/app/uploads", "/app/output"]
+RUN mkdir -p /app/data /app/output
+VOLUME ["/app/data", "/app/output"]
 
 EXPOSE 8080
 

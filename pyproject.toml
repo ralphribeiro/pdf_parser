@@ -43,8 +43,9 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",    # ASGI server
     "python-multipart>=0.0.9",      # File upload support (FastAPI)
 
-    # --- State / Queue ---
+    # --- State / Queue / Storage ---
     "redis>=5.0.0",                 # Redis client for shared job store
+    "pymongo>=4.7.0",               # MongoDB client for document store
     "chromadb>=0.4.0",              # Vector store for semantic search
 
     # --- Utilities ---

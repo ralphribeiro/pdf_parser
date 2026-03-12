@@ -1,18 +1,13 @@
 # =============================================================================
-# Docker Compose — Doc Parser services (Redis + API/UI + Worker)
-#
-# Three services sharing a Redis-backed JobStore:
-#   redis  — state/queue persistence
-#   api    — FastAPI (API + UI) on port 8080
-#   worker — standalone OCR worker polling Redis for jobs
+# Docker Compose — Doc Parser services (Redis + MongoDB + ChromaDB + API + Worker)
 #
 # Usage:
 #   docker compose -f docker-compose.services.yml up --build
 #
 # Endpoints:
-#   http://localhost:8080/          — UI upload page
-#   http://localhost:8080/jobs/{id} — UI job status (HTML)
-#   http://localhost:8080/api/jobs  — API (JSON)
+#   http://localhost:8090/          — UI upload page
+#   http://localhost:8090/jobs/{id} — UI job status (HTML)
+#   http://localhost:8090/api/jobs  — API (JSON)
 #
 # Host requirements:
 #   - amdgpu driver + ROCm installed
@@ -27,6 +22,15 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    container_name: doc-parser-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
     restart: unless-stopped
 
   chromadb:
@@ -48,16 +52,18 @@ services:
     ports:
       - "8090:8080"
     volumes:
-      - uploads:/app/uploads
+      - ./data:/app/data
       - output:/app/output
       - doctr-cache:/root/.cache
     depends_on:
       - redis
+      - mongodb
       - chromadb
     env_file:
       - .env
     environment:
       - DOC_PARSER_REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://mongodb:27017
       - CHROMA_HOST=http://chromadb:8000
       - EMBEDDING_API_URL=${EMBEDDING_API_URL}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-Qwen3-Embedding}
@@ -70,7 +76,7 @@ services:
     container_name: doc-parser-worker
     command: ["python", "-m", "services.worker.run"]
     volumes:
-      - uploads:/app/uploads
+      - ./data:/app/data
       - output:/app/output
       - doctr-cache:/root/.cache
 
@@ -88,11 +94,13 @@ services:
 
     depends_on:
       - redis
+      - mongodb
       - chromadb
     env_file:
       - .env
     environment:
       - DOC_PARSER_REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://mongodb:27017
       - CHROMA_HOST=http://chromadb:8000
       - EMBEDDING_API_URL=${EMBEDDING_API_URL}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-Qwen3-Embedding}
@@ -104,7 +112,7 @@ services:
 
 volumes:
   redis-data:
+  mongo-data:
   chroma-data:
-  uploads:
   output:
   doctr-cache:

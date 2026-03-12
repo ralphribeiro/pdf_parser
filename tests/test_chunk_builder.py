@@ -40,9 +40,9 @@ class TestChunkBuilder:
                 )
             ]
         )
-        chunks = build_chunks(document=doc, job_id="job-1")
+        chunks = build_chunks(document=doc, document_id="doc-1")
         assert len(chunks) == 1
-        assert chunks[0].chunk_id == "job-1:1:p1_b1"
+        assert chunks[0].chunk_id == "doc-1:1:p1_b1"
         assert "Primeiro parágrafo" in chunks[0].text
         assert chunks[0].source_file == "invoice.pdf"
 
@@ -64,7 +64,7 @@ class TestChunkBuilder:
                 )
             ]
         )
-        chunks = build_chunks(document=doc, job_id="job-1")
+        chunks = build_chunks(document=doc, document_id="doc-1")
         assert len(chunks) == 1
         assert "item descricao completa do produto" in chunks[0].text
         assert "taxa mensal referente ao serviço" in chunks[0].text
@@ -90,7 +90,7 @@ class TestChunkBuilder:
                 )
             ]
         )
-        chunks = build_chunks(document=doc, job_id="job-1")
+        chunks = build_chunks(document=doc, document_id="doc-1")
         assert len(chunks) > 1
         assert chunks[0].chunk_id.endswith(":part1")
         assert chunks[1].chunk_id.endswith(":part2")
@@ -113,7 +113,7 @@ class TestChunkBuilder:
                 )
             ]
         )
-        chunks = build_chunks(document=doc, job_id="job-1")
+        chunks = build_chunks(document=doc, document_id="doc-1")
         assert len(chunks) > 1
         assert chunks[0].chunk_id.endswith(":part1")
         assert chunks[1].chunk_id.endswith(":part2")
@@ -140,7 +140,7 @@ class TestChunkBuilder:
                 ),
             ]
         )
-        chunks = build_chunks(document=doc, job_id="job-1")
+        chunks = build_chunks(document=doc, document_id="doc-1")
         assert not chunks
 
     def test_skips_short_chunks(self):
@@ -174,7 +174,7 @@ class TestChunkBuilder:
                 ),
             ]
         )
-        chunks = build_chunks(document=doc, job_id="job-1")
+        chunks = build_chunks(document=doc, document_id="doc-1")
         assert len(chunks) == 1
         assert chunks[0].block_id == "p1_b3"
 
@@ -195,7 +195,7 @@ class TestChunkBuilder:
                 ),
             ]
         )
-        chunks = build_chunks(document=doc, job_id="job-1")
+        chunks = build_chunks(document=doc, document_id="doc-1")
         assert len(chunks) == 1
         assert not chunks[0].text.startswith(".dBmu9HEi")
         assert "Texto jurídico relevante" in chunks[0].text
@@ -219,5 +219,5 @@ class TestChunkBuilder:
                 ),
             ]
         )
-        chunks = build_chunks(document=doc, job_id="job-1")
+        chunks = build_chunks(document=doc, document_id="doc-1")
         assert not chunks

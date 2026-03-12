@@ -18,12 +18,12 @@ class _FakeCollection:
         self.delete_calls = []
         self.query_kwargs = None
         self.query_response = {
-            "ids": [["job-1:1:p1_b1"]],
+            "ids": [["doc-1:1:p1_b1"]],
             "documents": [["Conteudo"]],
             "metadatas": [
                 [
                     {
-                        "job_id": "job-1",
+                        "document_id": "doc-1",
                         "source_file": "a.pdf",
                         "page_number": 1,
                         "block_id": "p1_b1",
@@ -55,8 +55,8 @@ class _FakeCollection:
 
 def _sample_chunk():
     return TextChunk(
-        chunk_id="job-1:1:p1_b1",
-        job_id="job-1",
+        chunk_id="doc-1:1:p1_b1",
+        document_id="doc-1",
         source_file="a.pdf",
         page_number=1,
         block_id="p1_b1",
@@ -76,9 +76,9 @@ class TestChromaVectorStore:
 
         assert len(collection.upsert_calls) == 1
         call = collection.upsert_calls[0]
-        assert call["ids"] == ["job-1:1:p1_b1"]
+        assert call["ids"] == ["doc-1:1:p1_b1"]
         assert call["documents"] == ["Conteudo"]
-        assert call["metadatas"][0]["job_id"] == "job-1"
+        assert call["metadatas"][0]["document_id"] == "doc-1"
 
     def test_upsert_validates_lengths(self):
         from services.search.chroma_store import ChromaVectorStore
@@ -95,13 +95,13 @@ class TestChromaVectorStore:
         results = store.query(
             query_embedding=[0.9, 0.8],
             n_results=5,
-            job_id="job-1",
+            document_id="doc-1",
         )
 
         assert len(results) == 1
-        assert results[0].chunk_id == "job-1:1:p1_b1"
+        assert results[0].chunk_id == "doc-1:1:p1_b1"
         assert abs(results[0].similarity - 0.92) < 1e-9
-        assert collection.query_kwargs["where"] == {"job_id": "job-1"}
+        assert collection.query_kwargs["where"] == {"document_id": "doc-1"}
 
     def test_query_applies_min_similarity(self):
         from services.search.chroma_store import ChromaVectorStore
@@ -115,10 +115,10 @@ class TestChromaVectorStore:
         )
         assert not results
 
-    def test_delete_job(self):
+    def test_delete_document(self):
         from services.search.chroma_store import ChromaVectorStore
 
         collection = _FakeCollection()
         store = ChromaVectorStore(collection=collection)
-        store.delete_job("job-1")
-        assert collection.delete_calls == [{"where": {"job_id": "job-1"}}]
+        store.delete_document("doc-1")
+        assert collection.delete_calls == [{"where": {"document_id": "doc-1"}}]

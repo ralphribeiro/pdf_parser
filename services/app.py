@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from services.document_store import create_document_store
 from services.ingest_api.app import create_app as create_api_app
 from services.ingest_api.store import JobStore, create_store
 from services.ingest_ui.app import create_ui_app
@@ -25,8 +26,9 @@ def create_combined_app(
     if store is None:
         store = create_store()
     semantic_search = create_semantic_search_service()
+    document_store = create_document_store()
     if upload_dir is None:
-        upload_dir = Path("uploads")
+        upload_dir = Path("data")
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     application = FastAPI(
@@ -38,6 +40,7 @@ def create_combined_app(
         upload_dir=upload_dir,
         store=store,
         semantic_search=semantic_search,
+        document_store=document_store,
     )
     ui = create_ui_app(upload_dir=upload_dir, store=store)
 

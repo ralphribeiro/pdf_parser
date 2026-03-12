@@ -26,8 +26,10 @@ class _FakeVectorStore:
     def upsert_chunks(self, chunks, embeddings):  # pragma: no cover - not used
         _ = (chunks, embeddings)
 
-    def query(self, query_embedding, n_results, *, job_id=None, min_similarity=None):
-        _ = (query_embedding, n_results, job_id, min_similarity)
+    def query(
+        self, query_embedding, n_results, *, document_id=None, min_similarity=None
+    ):
+        _ = (query_embedding, n_results, document_id, min_similarity)
         return self.results
 
 
@@ -41,7 +43,7 @@ class TestSemanticSearchService:
                         chunk_id="c1",
                         text="Saldo devedor e juros contratuais",
                         similarity=0.8,
-                        job_id="j1",
+                        document_id="j1",
                         source_file="a.pdf",
                         page_number=1,
                         block_id="b1",
@@ -52,7 +54,7 @@ class TestSemanticSearchService:
                         chunk_id="c2",
                         text="Pedido de dano moral por negativacao indevida",
                         similarity=0.7,
-                        job_id="j1",
+                        document_id="j1",
                         source_file="a.pdf",
                         page_number=2,
                         block_id="b2",
@@ -76,7 +78,7 @@ class TestSemanticSearchService:
                         chunk_id="c1",
                         text="Tabela de parcelas e saldo atualizado",
                         similarity=0.9,
-                        job_id="j1",
+                        document_id="j1",
                         source_file="a.pdf",
                         page_number=1,
                         block_id="b1",
@@ -101,7 +103,7 @@ class TestSemanticSearchService:
                             "pedido de danos morais e materiais por inscricao indevida"
                         ),
                         similarity=0.8,
-                        job_id="j1",
+                        document_id="j1",
                         source_file="a.pdf",
                         page_number=1,
                         block_id="b1",

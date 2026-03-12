@@ -35,7 +35,11 @@ class RedisJobStore:
 
     # -- public interface (mirrors JobStore) --------------------------------
 
-    def create(self, filename: str) -> Job:
+    def create(
+        self,
+        filename: str,
+        document_id: str | None = None,
+    ) -> Job:
         """Create a new job with status QUEUED and return it."""
         now = datetime.now()
         job = Job(
@@ -43,6 +47,7 @@ class RedisJobStore:
             filename=filename,
             status=JobStatus.QUEUED,
             created_at=now,
+            document_id=document_id,
         )
         pipe = self._r.pipeline(transaction=True)
         pipe.set(f"{_KEY_PREFIX}{job.job_id}", job.model_dump_json())

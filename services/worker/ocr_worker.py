@@ -7,7 +7,6 @@ can be mocked in tests.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import traceback
 from collections.abc import Callable
@@ -15,18 +14,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from services.document_store import DocumentStore
     from services.ingest_api.store import JobStore
 
 logger = logging.getLogger(__name__)
-
-
-def compute_file_hash(path: str | Path) -> str:
-    """Return the SHA-256 hex digest of a file (for idempotency checks)."""
-    h = hashlib.sha256()
-    with Path(path).open("rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 class OcrWorker:
@@ -39,11 +30,13 @@ class OcrWorker:
         output_dir: Path,
         artifact_fn: Callable[..., Any] | None = None,
         semantic_indexer: Any | None = None,
+        document_store: DocumentStore | None = None,
     ) -> None:
         self.store = store
         self.upload_dir = upload_dir
         self.output_dir = output_dir
         self.semantic_indexer = semantic_indexer
+        self.document_store = document_store
 
         if artifact_fn is None:
             from src.pipeline import generate_artifacts
@@ -61,10 +54,18 @@ class OcrWorker:
             logger.warning("Job %s not found, skipping", job_id)
             return
 
-        pdf_path = self.upload_dir / f"{job_id}.pdf"
-        file_hash = compute_file_hash(pdf_path)
+        document_id = job.document_id
 
-        self.store.update_status(job_id, JobStatus.PROCESSING, file_hash=file_hash)
+        if document_id and self.document_store:
+            mongo_doc = self.document_store.get_document(document_id)
+            pdf_path = Path(mongo_doc["pdf_path"]) if mongo_doc else None
+            if pdf_path is None or not pdf_path.exists():
+                pdf_path = self.upload_dir / f"{document_id}.pdf"
+            self.document_store.update_status(document_id, "processing")
+        else:
+            pdf_path = self.upload_dir / f"{job_id}.pdf"
+
+        self.store.update_status(job_id, JobStatus.PROCESSING)
 
         try:
             artifacts = self._artifact_fn(pdf_path, self.output_dir)
@@ -75,17 +76,33 @@ class OcrWorker:
                 JobStatus.FAILED,
                 error_message=traceback.format_exc(),
             )
+            if document_id and self.document_store:
+                self.document_store.update_status(
+                    document_id, "failed", error_message=traceback.format_exc()
+                )
             return
 
+        if document_id and self.document_store:
+            try:
+                parsed = artifacts.document.model_dump()
+                total_pages = len(artifacts.document.pages)
+                self.document_store.save_parsed(document_id, parsed, total_pages)
+            except Exception:
+                logger.exception(
+                    "Job %s: failed to save parsed document to MongoDB (non-fatal)",
+                    job_id,
+                )
+
+        ref_id = document_id or job_id
         if self.semantic_indexer is not None:
             try:
-                n = self.semantic_indexer.index_document(job_id, artifacts.document)
-                logger.info("Job %s: indexed %d chunks", job_id, n)
+                n = self.semantic_indexer.index_document(ref_id, artifacts.document)
+                logger.info("Job %s: indexed %d chunks (ref=%s)", job_id, n, ref_id)
             except Exception:
                 logger.exception("Job %s: semantic indexing failed (non-fatal)", job_id)
 
         self.store.update_status(job_id, JobStatus.UPLOADED)
-        logger.info("Job %s completed", job_id)
+        logger.info("Job %s completed (document_id=%s)", job_id, document_id)
 
     def process_next(self) -> bool:
         """Find and process the next queued job. Returns True if one was processed."""

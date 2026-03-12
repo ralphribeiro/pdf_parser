@@ -16,7 +16,7 @@ class TextChunk:
     """Chunk payload ready for embedding/vector indexing."""
 
     chunk_id: str
-    job_id: str
+    document_id: str
     source_file: str
     page_number: int
     block_id: str
@@ -144,7 +144,7 @@ def _is_low_value_chunk(text: str) -> bool:
     return lowered.startswith("fls. ") and len(text) < 120
 
 
-def build_chunks(document: Document, job_id: str) -> list[TextChunk]:
+def build_chunks(document: Document, document_id: str) -> list[TextChunk]:
     """Flatten a Document into semantic chunks (text + table content).
 
     Chunks shorter than MIN_CHUNK_CHARS are skipped because they carry
@@ -173,8 +173,8 @@ def build_chunks(document: Document, job_id: str) -> list[TextChunk]:
                 part_suffix = f":part{idx}" if total_parts > 1 else ""
                 chunks.append(
                     TextChunk(
-                        chunk_id=f"{job_id}:{page.page}:{block.block_id}{part_suffix}",
-                        job_id=job_id,
+                        chunk_id=f"{document_id}:{page.page}:{block.block_id}{part_suffix}",
+                        document_id=document_id,
                         source_file=document.source_file,
                         page_number=page.page,
                         block_id=f"{block.block_id}{part_suffix}",

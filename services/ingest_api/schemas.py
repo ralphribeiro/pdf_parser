@@ -34,12 +34,17 @@ class Job(BaseModel):
     file_hash: str | None = Field(
         default=None, description="SHA-256 hash of the uploaded file"
     )
+    document_id: str | None = Field(
+        default=None, description="MongoDB document identifier"
+    )
 
 
 class SearchFilters(BaseModel):
     """Optional filters for semantic search."""
 
-    job_id: str | None = Field(default=None, description="Restrict results to one job")
+    document_id: str | None = Field(
+        default=None, description="Restrict results to one document"
+    )
 
 
 class SearchRequest(BaseModel):
@@ -64,7 +69,7 @@ class SearchResult(BaseModel):
     chunk_id: str = Field(description="Unique chunk identifier")
     text: str = Field(description="Retrieved chunk text")
     similarity: float = Field(ge=0.0, le=1.0, description="Similarity score")
-    job_id: str = Field(description="Origin job identifier")
+    document_id: str = Field(description="Origin document identifier")
     source_file: str = Field(description="Origin filename")
     page_number: int = Field(ge=1, description="Origin page number")
     block_id: str = Field(description="Origin block id")

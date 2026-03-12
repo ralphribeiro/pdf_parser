@@ -40,7 +40,9 @@ class _InMemoryVectorStore:
             for chunk, emb in zip(chunks, embeddings, strict=True)
         ]
 
-    def query(self, query_embedding, n_results, *, job_id=None, min_similarity=None):
+    def query(
+        self, query_embedding, n_results, *, document_id=None, min_similarity=None
+    ):
         from services.ingest_api.schemas import SearchResult
 
         q = query_embedding[0]
@@ -49,7 +51,7 @@ class _InMemoryVectorStore:
             chunk = row["chunk"]
             emb = row["embedding"][0]
             similarity = max(0.0, 1.0 - abs(q - emb) / max(q, emb, 1.0))
-            if job_id and chunk.job_id != job_id:
+            if document_id and chunk.document_id != document_id:
                 continue
             if min_similarity is not None and similarity < min_similarity:
                 continue
@@ -58,7 +60,7 @@ class _InMemoryVectorStore:
                     chunk_id=chunk.chunk_id,
                     text=chunk.text,
                     similarity=similarity,
-                    job_id=chunk.job_id,
+                    document_id=chunk.document_id,
                     source_file=chunk.source_file,
                     page_number=chunk.page_number,
                     block_id=chunk.block_id,
@@ -132,7 +134,10 @@ class TestSemanticFlow:
         app = create_app(upload_dir=tmp_path, store=job_store, semantic_search=service)
         response = TestClient(app).post(
             "/search",
-            json={"query": "contrato de locacao", "filters": {"job_id": job.job_id}},
+            json={
+                "query": "contrato de locacao",
+                "filters": {"document_id": job.job_id},
+            },
         )
         assert response.status_code == 200
         payload = response.json()

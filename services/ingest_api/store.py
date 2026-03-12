@@ -33,13 +33,18 @@ class JobStore:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
 
-    def create(self, filename: str) -> Job:
+    def create(
+        self,
+        filename: str,
+        document_id: str | None = None,
+    ) -> Job:
         """Create a new job with status QUEUED and return it."""
         job = Job(
             job_id=str(uuid.uuid4()),
             filename=filename,
             status=JobStatus.QUEUED,
             created_at=datetime.now(),
+            document_id=document_id,
         )
         with self._lock:
             self._jobs[job.job_id] = job

@@ -40,14 +40,16 @@ def run_loop(
 
 def main() -> None:
     """Bootstrap a standalone worker process using the store factory."""
+    from services.document_store import create_document_store
     from services.ingest_api.store import create_store
     from services.search.factory import create_semantic_search_service
     from services.worker.ocr_worker import OcrWorker
 
     store = create_store()
     semantic_search = create_semantic_search_service()
+    document_store = create_document_store()
 
-    upload_dir = Path(os.getenv("DOC_PARSER_UPLOAD_DIR", "uploads"))
+    upload_dir = Path(os.getenv("DOC_PARSER_UPLOAD_DIR", "data"))
     output_dir = Path(os.getenv("DOC_PARSER_OUTPUT_DIR", "output"))
     upload_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -57,6 +59,7 @@ def main() -> None:
         upload_dir=upload_dir,
         output_dir=output_dir,
         semantic_indexer=semantic_search,
+        document_store=document_store,
     )
 
     logger.info("Worker started (store=%s)", type(store).__name__)

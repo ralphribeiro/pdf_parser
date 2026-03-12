@@ -72,7 +72,7 @@ class ChromaVectorStore:
         documents = [chunk.text for chunk in chunks]
         metadatas = [
             {
-                "job_id": chunk.job_id,
+                "document_id": chunk.document_id,
                 "source_file": chunk.source_file,
                 "page_number": chunk.page_number,
                 "block_id": chunk.block_id,
@@ -102,11 +102,11 @@ class ChromaVectorStore:
         query_embedding: list[float],
         n_results: int,
         *,
-        job_id: str | None = None,
+        document_id: str | None = None,
         min_similarity: float | None = None,
     ) -> list[SearchResult]:
         """Query nearest chunks and convert to API response shape."""
-        where = {"job_id": job_id} if job_id else None
+        where = {"document_id": document_id} if document_id else None
         raw = self.collection.query(  # pylint: disable=assignment-from-no-return
             query_embeddings=[query_embedding],
             n_results=n_results,
@@ -134,7 +134,7 @@ class ChromaVectorStore:
                     chunk_id=str(chunk_id),
                     text=str(text),
                     similarity=similarity,
-                    job_id=str(metadata.get("job_id", "")),
+                    document_id=str(metadata.get("document_id", "")),
                     source_file=str(metadata.get("source_file", "")),
                     page_number=int(metadata.get("page_number", 1)),
                     block_id=str(metadata.get("block_id", "")),
@@ -144,6 +144,6 @@ class ChromaVectorStore:
             )
         return results
 
-    def delete_job(self, job_id: str) -> None:
-        """Delete all vectors belonging to one job."""
-        self.collection.delete(where={"job_id": job_id})
+    def delete_document(self, document_id: str) -> None:
+        """Delete all vectors belonging to one document."""
+        self.collection.delete(where={"document_id": document_id})

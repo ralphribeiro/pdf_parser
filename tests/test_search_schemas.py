@@ -33,15 +33,15 @@ class TestSearchRequest:
         with pytest.raises(ValidationError):
             SearchRequest(query="abc", n_results=0)
 
-    def test_accepts_job_filter(self):
+    def test_accepts_document_filter(self):
         from services.ingest_api.schemas import SearchFilters, SearchRequest
 
         req = SearchRequest(
             query="contrato",
-            filters=SearchFilters(job_id="job-123"),
+            filters=SearchFilters(document_id="doc-123"),
         )
         assert req.filters is not None
-        assert req.filters.job_id == "job-123"
+        assert req.filters.document_id == "doc-123"
 
 
 class TestSearchResponse:
@@ -49,10 +49,10 @@ class TestSearchResponse:
         from services.ingest_api.schemas import SearchResponse, SearchResult
 
         result = SearchResult(
-            chunk_id="job-1:3:p3_b1",
+            chunk_id="doc-1:3:p3_b1",
             text="Texto relevante",
             similarity=0.92,
-            job_id="job-1",
+            document_id="doc-1",
             source_file="doc.pdf",
             page_number=3,
             block_id="p3_b1",
@@ -75,7 +75,7 @@ class TestSearchResponse:
                 chunk_id="x",
                 text="x",
                 similarity=1.5,
-                job_id="j",
+                document_id="j",
                 source_file="f.pdf",
                 page_number=1,
                 block_id="b",

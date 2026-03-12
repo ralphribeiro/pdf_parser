@@ -18,21 +18,21 @@ class _FakeSearchService:
     def __init__(self):
         self.calls = []
 
-    def search(self, query, *, n_results, job_id=None, min_similarity=None):
+    def search(self, query, *, n_results, document_id=None, min_similarity=None):
         self.calls.append(
             {
                 "query": query,
                 "n_results": n_results,
-                "job_id": job_id,
+                "document_id": document_id,
                 "min_similarity": min_similarity,
             }
         )
         return [
             SearchResult(
-                chunk_id="job-1:1:p1_b1",
+                chunk_id="doc-1:1:p1_b1",
                 text="Resultado",
                 similarity=0.87,
-                job_id="job-1",
+                document_id="doc-1",
                 source_file="doc.pdf",
                 page_number=1,
                 block_id="p1_b1",
@@ -57,7 +57,7 @@ class TestSearchEndpoint:
         assert response.status_code == 200
         payload = response.json()
         assert payload["total_matches"] == 1
-        assert payload["results"][0]["chunk_id"] == "job-1:1:p1_b1"
+        assert payload["results"][0]["chunk_id"] == "doc-1:1:p1_b1"
         assert payload["processing_time_ms"] >= 0
 
     def test_passes_filters_to_service(self, tmp_path):
@@ -69,7 +69,7 @@ class TestSearchEndpoint:
             json={
                 "query": "resultado",
                 "n_results": 3,
-                "filters": {"job_id": "job-1"},
+                "filters": {"document_id": "doc-1"},
                 "min_similarity": 0.7,
             },
         )
@@ -77,6 +77,6 @@ class TestSearchEndpoint:
         assert service.calls[0] == {
             "query": "resultado",
             "n_results": 3,
-            "job_id": "job-1",
+            "document_id": "doc-1",
             "min_similarity": 0.7,
         }

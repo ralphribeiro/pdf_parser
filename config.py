@@ -174,6 +174,13 @@ VERBOSE = _env_bool("DOC_PARSER_VERBOSE", True)
 REDIS_URL = os.getenv("DOC_PARSER_REDIS_URL", "")
 
 # ---------------------------------------------------------------------------
+# MongoDB
+# ---------------------------------------------------------------------------
+
+MONGO_URL = os.getenv("MONGO_URL") or os.getenv("DOC_PARSER_MONGO_URL", "")
+MONGO_DB = os.getenv("MONGO_DB") or os.getenv("DOC_PARSER_MONGO_DB", "doc_parser")
+
+# ---------------------------------------------------------------------------
 # Semantic Search (ChromaDB + Embedding API)
 # ---------------------------------------------------------------------------
 
