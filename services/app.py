@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from services.ingest_api.app import create_app as create_api_app
 from services.ingest_api.store import JobStore, create_store
 from services.ingest_ui.app import create_ui_app
+from services.search.factory import create_semantic_search_service
 
 
 def create_combined_app(
@@ -23,6 +24,7 @@ def create_combined_app(
     """Build the combined application with shared state."""
     if store is None:
         store = create_store()
+    semantic_search = create_semantic_search_service()
     if upload_dir is None:
         upload_dir = Path("uploads")
     upload_dir.mkdir(parents=True, exist_ok=True)
@@ -32,7 +34,11 @@ def create_combined_app(
         version="0.1.0",
     )
 
-    api = create_api_app(upload_dir=upload_dir, store=store)
+    api = create_api_app(
+        upload_dir=upload_dir,
+        store=store,
+        semantic_search=semantic_search,
+    )
     ui = create_ui_app(upload_dir=upload_dir, store=store)
 
     application.mount("/api", api)

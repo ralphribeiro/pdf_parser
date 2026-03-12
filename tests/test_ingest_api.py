@@ -369,3 +369,29 @@ class TestGetJob:
         data = response.json()
         assert data["status"] == "failed"
         assert data["error_message"] == "Pipeline crash"
+
+
+# =========================================================================
+# Cycle A3: GET /jobs/healthcheck endpoint
+# =========================================================================
+
+
+class TestHealthcheck:
+    """Tests for API health endpoint used by Docker healthchecks."""
+
+    @pytest.fixture
+    def client(self, tmp_path):
+        from fastapi.testclient import TestClient
+        from services.ingest_api.app import create_app
+        from services.ingest_api.store import JobStore
+
+        app = create_app(upload_dir=tmp_path, store=JobStore())
+        return TestClient(app)
+
+    def test_healthcheck_returns_200(self, client):
+        response = client.get("/jobs/healthcheck")
+        assert response.status_code == 200
+
+    def test_healthcheck_payload(self, client):
+        response = client.get("/jobs/healthcheck")
+        assert response.json() == {"status": "ok"}

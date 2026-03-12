@@ -174,6 +174,27 @@ VERBOSE = _env_bool("DOC_PARSER_VERBOSE", True)
 REDIS_URL = os.getenv("DOC_PARSER_REDIS_URL", "")
 
 # ---------------------------------------------------------------------------
+# Semantic Search (ChromaDB + Embedding API)
+# ---------------------------------------------------------------------------
+
+CHROMA_HOST = os.getenv("CHROMA_HOST") or os.getenv("DOC_PARSER_CHROMA_HOST", "")
+CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION") or os.getenv(
+    "DOC_PARSER_CHROMA_COLLECTION", "document_embeddings"
+)
+EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL") or os.getenv(
+    "DOC_PARSER_EMBEDDING_API_URL", ""
+)
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL") or os.getenv(
+    "DOC_PARSER_EMBEDDING_MODEL", "Qwen3-Embedding"
+)
+_embedding_timeout_raw = (
+    os.getenv("EMBEDDING_TIMEOUT_SECONDS")
+    or os.getenv("DOC_PARSER_EMBEDDING_TIMEOUT_SECONDS")
+    or "10"
+)
+EMBEDDING_TIMEOUT_SECONDS = float(_embedding_timeout_raw)
+
+# ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
 

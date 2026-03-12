@@ -42,6 +42,6 @@ VOLUME ["/app/uploads", "/app/output"]
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import httpx; r = httpx.get('http://localhost:8080/api/jobs/healthcheck'); print('ok')" || exit 1
+    CMD python -c "import httpx; r = httpx.get('http://localhost:8080/api/jobs/healthcheck'); r.raise_for_status(); print('ok')" || exit 1
 
 CMD ["uvicorn", "services.app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]

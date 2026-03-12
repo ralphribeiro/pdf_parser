@@ -45,10 +45,12 @@ dependencies = [
 
     # --- State / Queue ---
     "redis>=5.0.0",                 # Redis client for shared job store
+    "chromadb>=0.4.0",              # Vector store for semantic search
 
     # --- Utilities ---
     "pydantic>=2.5.0",              # JSON schema validation
     "python-dotenv>=1.0.0",         # Configuration via .env
+    "httpx>=0.27.0",                # HTTP client (embedding service + healthchecks)
 ]
 
 [project.optional-dependencies]
@@ -61,7 +63,6 @@ dev = [
     "xenon",
     "radon",
     "pytest>=8.0.0",
-    "httpx>=0.27.0",
     "fakeredis>=2.0.0",
 ]
 # PyTorch with ROCm support (AMD GPU).

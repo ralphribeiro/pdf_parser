@@ -6,17 +6,19 @@ Endpoints:
     GET  /jobs/{job_id} - Query job status (200 / 404)
 """
 
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 
-from services.ingest_api.schemas import Job
+from services.ingest_api.schemas import Job, SearchRequest, SearchResponse
 from services.ingest_api.store import JobStore
 
 
 def create_app(
     upload_dir: Path | None = None,
     store: JobStore | None = None,
+    semantic_search=None,
 ) -> FastAPI:
     """Factory with dependency injection for testing."""
     if store is None:
@@ -34,6 +36,7 @@ def create_app(
 
     application.state.store = store
     application.state.upload_dir = upload_dir
+    application.state.semantic_search = semantic_search
 
     _register_routes(application)
 
@@ -41,6 +44,9 @@ def create_app(
 
 
 def _register_routes(app: FastAPI) -> None:
+    @app.get("/jobs/healthcheck", summary="Healthcheck")
+    async def jobs_healthcheck() -> dict[str, str]:
+        return {"status": "ok"}
 
     @app.post(
         "/jobs",
@@ -81,3 +87,30 @@ def _register_routes(app: FastAPI) -> None:
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
         return job
+
+    @app.post(
+        "/search",
+        response_model=SearchResponse,
+        summary="Semantic search over indexed chunks",
+    )
+    async def search(request: Request, payload: SearchRequest) -> SearchResponse:
+        service = request.app.state.semantic_search
+        if service is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Semantic search service is not configured",
+            )
+
+        started = time.monotonic()
+        results = service.search(
+            payload.query,
+            n_results=payload.n_results,
+            job_id=(payload.filters.job_id if payload.filters else None),
+            min_similarity=payload.min_similarity,
+        )
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        return SearchResponse(
+            results=results,
+            total_matches=len(results),
+            processing_time_ms=elapsed_ms,
+        )

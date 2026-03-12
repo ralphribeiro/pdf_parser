@@ -147,7 +147,7 @@ class TestFileHash:
 class TestOcrWorkerProcessJob:
     """Worker must drive the full job lifecycle: queued -> processing -> uploaded."""
 
-    def _make_worker(self, store, tmp_path, *, artifact_fn=None):
+    def _make_worker(self, store, tmp_path, *, artifact_fn=None, semantic_indexer=None):
         from services.worker.ocr_worker import OcrWorker
 
         upload_dir = tmp_path / "uploads"
@@ -176,6 +176,7 @@ class TestOcrWorkerProcessJob:
             upload_dir=upload_dir,
             output_dir=output_dir,
             artifact_fn=artifact_fn,
+            semantic_indexer=semantic_indexer,
         )
 
     def _seed_job(self, store, upload_dir):
@@ -258,6 +259,32 @@ class TestOcrWorkerProcessJob:
         assert final is not None
         assert final.status == JobStatus.FAILED
         assert "OCR engine exploded" in (final.error_message or "")
+
+    def test_indexes_document_after_success(self, tmp_path):
+        store = JobStore()
+        indexer = MagicMock()
+        worker = self._make_worker(store, tmp_path, semantic_indexer=indexer)
+        job = self._seed_job(store, worker.upload_dir)
+
+        worker.process_job(job.job_id)
+
+        indexer.index_document.assert_called_once()
+        args = indexer.index_document.call_args.args
+        assert args[0] == job.job_id
+
+    def test_index_error_sets_failed(self, tmp_path):
+        store = JobStore()
+        indexer = MagicMock()
+        indexer.index_document.side_effect = RuntimeError("index backend down")
+        worker = self._make_worker(store, tmp_path, semantic_indexer=indexer)
+        job = self._seed_job(store, worker.upload_dir)
+
+        worker.process_job(job.job_id)
+
+        final = store.get(job.job_id)
+        assert final is not None
+        assert final.status == JobStatus.FAILED
+        assert "index backend down" in (final.error_message or "")
 
 
 # =========================================================================

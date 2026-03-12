@@ -38,10 +38,12 @@ class OcrWorker:
         upload_dir: Path,
         output_dir: Path,
         artifact_fn: Callable[..., Any] | None = None,
+        semantic_indexer: Any | None = None,
     ) -> None:
         self.store = store
         self.upload_dir = upload_dir
         self.output_dir = output_dir
+        self.semantic_indexer = semantic_indexer
 
         if artifact_fn is None:
             from src.pipeline import generate_artifacts
@@ -65,7 +67,9 @@ class OcrWorker:
         self.store.update_status(job_id, JobStatus.PROCESSING, file_hash=file_hash)
 
         try:
-            self._artifact_fn(pdf_path, self.output_dir)
+            artifacts = self._artifact_fn(pdf_path, self.output_dir)
+            if self.semantic_indexer is not None:
+                self.semantic_indexer.index_document(job_id, artifacts.document)
 
             self.store.update_status(job_id, JobStatus.UPLOADED)
             logger.info("Job %s completed", job_id)

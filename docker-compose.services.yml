@@ -29,22 +29,38 @@ services:
       - redis-data:/data
     restart: unless-stopped
 
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: doc-parser-chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=FALSE
+      - IS_PERSISTENT=TRUE
+    restart: unless-stopped
+
   api:
     build: .
     container_name: doc-parser-api
     command: ["uvicorn", "services.app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
     ports:
-      - "8080:8080"
+      - "8090:8080"
     volumes:
       - uploads:/app/uploads
       - output:/app/output
       - doctr-cache:/root/.cache
     depends_on:
       - redis
+      - chromadb
     env_file:
       - .env
     environment:
       - DOC_PARSER_REDIS_URL=redis://redis:6379/0
+      - CHROMA_HOST=http://chromadb:8000
+      - EMBEDDING_API_URL=${EMBEDDING_API_URL}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-Qwen3-Embedding}
       - HSA_OVERRIDE_GFX_VERSION=11.0.0
       - PYTORCH_HIP_ALLOC_CONF=max_split_size_mb:512
     restart: unless-stopped
@@ -72,16 +88,23 @@ services:
 
     depends_on:
       - redis
+      - chromadb
     env_file:
       - .env
     environment:
       - DOC_PARSER_REDIS_URL=redis://redis:6379/0
+      - CHROMA_HOST=http://chromadb:8000
+      - EMBEDDING_API_URL=${EMBEDDING_API_URL}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-Qwen3-Embedding}
       - HSA_OVERRIDE_GFX_VERSION=11.0.0
       - PYTORCH_HIP_ALLOC_CONF=max_split_size_mb:512
+    healthcheck:
+      disable: true
     restart: unless-stopped
 
 volumes:
   redis-data:
+  chroma-data:
   uploads:
   output:
   doctr-cache:
