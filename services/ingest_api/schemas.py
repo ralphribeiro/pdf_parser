@@ -31,3 +31,6 @@ class Job(BaseModel):
     error_message: str | None = Field(
         default=None, description="Error details if status is failed"
     )
+    file_hash: str | None = Field(
+        default=None, description="SHA-256 hash of the uploaded file"
+    )

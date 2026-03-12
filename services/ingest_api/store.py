@@ -36,12 +36,21 @@ class JobStore:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def get_next_queued(self) -> Job | None:
+        """Return the oldest queued job, or None."""
+        with self._lock:
+            for job in self._jobs.values():
+                if job.status == JobStatus.QUEUED:
+                    return job
+            return None
+
     def update_status(
         self,
         job_id: str,
         status: JobStatus,
         *,
         error_message: str | None = None,
+        file_hash: str | None = None,
     ) -> Job | None:
         """Update job status and timestamps. Returns None if not found."""
         with self._lock:
@@ -62,6 +71,9 @@ class JobStore:
                         datetime.now()
                         if status in (JobStatus.UPLOADED, JobStatus.FAILED)
                         else job.completed_at
+                    ),
+                    "file_hash": (
+                        file_hash if file_hash is not None else job.file_hash
                     ),
                 }
             )
