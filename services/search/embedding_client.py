@@ -24,12 +24,16 @@ class EmbeddingClient:
     timeout_seconds: float = 120.0
     batch_size: int = 32
     max_chars_per_text: int = _DEFAULT_MAX_CHARS
+    api_key: str = ""
     http_client: httpx.Client | None = None
 
     def _client(self) -> httpx.Client:
         if self.http_client is not None:
             return self.http_client
-        return httpx.Client(base_url=self.base_url, timeout=self.timeout_seconds)
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        return httpx.Client(
+            base_url=self.base_url, timeout=self.timeout_seconds, headers=headers
+        )
 
     def _embed_batch(self, client: httpx.Client, texts: list[str]) -> list[list[float]]:
         """Send a single batch to the embedding API and parse the response."""

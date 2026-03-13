@@ -6,6 +6,7 @@ Endpoints:
     GET  /jobs/{job_id}     - Query job status (200 / 404)
     POST /search            - Semantic search over indexed chunks
     GET  /documents/{id}    - Retrieve parsed document from MongoDB
+    POST /agent/search      - Agent-based enriched semantic search
 """
 
 from __future__ import annotations
@@ -17,7 +18,14 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 
-from services.ingest_api.schemas import Job, SearchRequest, SearchResponse
+from services.ingest_api.schemas import (
+    AgentSearchRequest,
+    AgentSearchResponse,
+    AgentSource,
+    Job,
+    SearchRequest,
+    SearchResponse,
+)
 from services.ingest_api.store import JobStore
 
 
@@ -26,6 +34,7 @@ def create_app(
     store: JobStore | None = None,
     semantic_search: Any = None,
     document_store: Any = None,
+    agent_runner: Any = None,
 ) -> FastAPI:
     """Factory with dependency injection for testing."""
     if store is None:
@@ -45,10 +54,18 @@ def create_app(
     application.state.upload_dir = upload_dir
     application.state.semantic_search = semantic_search
     application.state.document_store = document_store
+    application.state.agent_runner = agent_runner
 
     _register_routes(application)
 
     return application
+
+
+def _with_max_iterations(runner: Any, max_iterations: int) -> Any:
+    """Return a copy of the agent runner with overridden max_iterations."""
+    from dataclasses import replace
+
+    return replace(runner, max_iterations=max_iterations)
 
 
 def _compute_hash(content: bytes) -> str:
@@ -177,3 +194,33 @@ def _register_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=404, detail="Document not found")
         doc["_id"] = str(doc["_id"])
         return doc
+
+    @app.post(
+        "/agent/search",
+        response_model=AgentSearchResponse,
+        summary="Agent-based enriched semantic search",
+        responses={503: {"description": "Agent not configured"}},
+    )
+    async def agent_search(
+        request: Request, payload: AgentSearchRequest
+    ) -> AgentSearchResponse:
+        runner = request.app.state.agent_runner
+        if runner is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Agent search is not configured (LLM_API_URL not set)",
+            )
+
+        if payload.max_iterations:
+            runner = _with_max_iterations(runner, payload.max_iterations)
+
+        started = time.monotonic()
+        result = runner.run(payload.query)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+
+        return AgentSearchResponse(
+            answer=result.answer,
+            sources=[AgentSource(**s) for s in result.sources],
+            iterations=result.iterations,
+            processing_time_ms=elapsed_ms,
+        )

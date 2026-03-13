@@ -202,6 +202,22 @@ _embedding_timeout_raw = (
 EMBEDDING_TIMEOUT_SECONDS = float(_embedding_timeout_raw)
 
 EMBEDDING_BATCH_SIZE = _env_int("DOC_PARSER_EMBEDDING_BATCH_SIZE", 32)
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY") or os.getenv(
+    "DOC_PARSER_EMBEDDING_API_KEY", ""
+)
+
+# ---------------------------------------------------------------------------
+# LLM / Agent (chat completion via OpenAI-compatible API)
+# ---------------------------------------------------------------------------
+
+LLM_API_URL = os.getenv("LLM_API_URL") or os.getenv("DOC_PARSER_LLM_API_URL", "")
+LLM_MODEL = os.getenv("LLM_MODEL") or os.getenv(
+    "DOC_PARSER_LLM_MODEL", "Qwen3.5-9B-Q4_K_M"
+)
+LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("DOC_PARSER_LLM_API_KEY", "")
+LLM_MAX_TOKENS = _env_int("DOC_PARSER_LLM_MAX_TOKENS", 4096)
+AGENT_MAX_ITERATIONS = _env_int("DOC_PARSER_AGENT_MAX_ITERATIONS", 8)
+AGENT_CONTEXT_BUDGET = _env_int("DOC_PARSER_AGENT_CONTEXT_BUDGET", 400000)
 
 # ---------------------------------------------------------------------------
 # Logging

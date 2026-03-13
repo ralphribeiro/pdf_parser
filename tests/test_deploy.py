@@ -30,7 +30,9 @@ def _make_app(tmp_path, store=None):
         store = JobStore()
     upload_dir = tmp_path / "uploads"
     upload_dir.mkdir(exist_ok=True)
-    return create_combined_app(upload_dir=upload_dir, store=store), store
+    return create_combined_app(
+        upload_dir=upload_dir, store=store, document_store=None
+    ), store
 
 
 # =========================================================================

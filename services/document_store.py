@@ -102,6 +102,49 @@ class DocumentStore:
             {"_id": _to_object_id(document_id)}, {"$set": update}
         )
 
+    def list_documents(
+        self, *, status: str | None = None, limit: int = 20
+    ) -> list[dict]:
+        """Return documents, optionally filtered by status."""
+        query: dict[str, Any] = {}
+        if status:
+            query["status"] = status
+        projection = {
+            "filename": 1,
+            "status": 1,
+            "total_pages": 1,
+            "created_at": 1,
+            "file_size": 1,
+        }
+        cursor = self.collection.find(query, projection).limit(limit)
+        results: list[dict] = []
+        for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            results.append(doc)
+        return results
+
+    def search_text(self, document_id: str, keyword: str) -> list[dict]:
+        """Search for a keyword inside the parsed_document of a specific document."""
+        doc = self.get_document(document_id)
+        if not doc:
+            return []
+        parsed = doc.get("parsed_document") or {}
+        pages = parsed.get("pages", [])
+        hits: list[dict] = []
+        kw_lower = keyword.lower()
+        for page in pages:
+            for block in page.get("blocks", []):
+                text = block.get("text") or ""
+                if text and kw_lower in text.lower():
+                    hits.append(
+                        {
+                            "page": page.get("page") or page.get("page_number") or 0,
+                            "block_id": block.get("block_id", ""),
+                            "text": text,
+                        }
+                    )
+        return hits
+
     def update_pdf_path(self, document_id: str, pdf_path: str) -> None:
         """Set the filesystem path of the stored PDF."""
         self.collection.update_one(

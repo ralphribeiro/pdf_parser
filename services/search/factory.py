@@ -26,6 +26,7 @@ def create_semantic_search_service() -> SemanticSearchService | None:
         model=cast(str, config.EMBEDDING_MODEL),
         timeout_seconds=config.EMBEDDING_TIMEOUT_SECONDS,
         batch_size=config.EMBEDDING_BATCH_SIZE,
+        api_key=config.EMBEDDING_API_KEY or "",
     )
     try:
         vector_store = ChromaVectorStore.from_host(
