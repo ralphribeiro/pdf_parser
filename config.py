@@ -168,6 +168,58 @@ VERBOSE = _env_bool("DOC_PARSER_VERBOSE", True)
 
 
 # ---------------------------------------------------------------------------
+# Redis
+# ---------------------------------------------------------------------------
+
+REDIS_URL = os.getenv("DOC_PARSER_REDIS_URL", "")
+
+# ---------------------------------------------------------------------------
+# MongoDB
+# ---------------------------------------------------------------------------
+
+MONGO_URL = os.getenv("MONGO_URL") or os.getenv("DOC_PARSER_MONGO_URL", "")
+MONGO_DB = os.getenv("MONGO_DB") or os.getenv("DOC_PARSER_MONGO_DB", "doc_parser")
+
+# ---------------------------------------------------------------------------
+# Semantic Search (ChromaDB + Embedding API)
+# ---------------------------------------------------------------------------
+
+CHROMA_HOST = os.getenv("CHROMA_HOST") or os.getenv("DOC_PARSER_CHROMA_HOST", "")
+CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION") or os.getenv(
+    "DOC_PARSER_CHROMA_COLLECTION", "document_embeddings"
+)
+EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL") or os.getenv(
+    "DOC_PARSER_EMBEDDING_API_URL", ""
+)
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL") or os.getenv(
+    "DOC_PARSER_EMBEDDING_MODEL", "Qwen3-Embedding"
+)
+_embedding_timeout_raw = (
+    os.getenv("EMBEDDING_TIMEOUT_SECONDS")
+    or os.getenv("DOC_PARSER_EMBEDDING_TIMEOUT_SECONDS")
+    or "120"
+)
+EMBEDDING_TIMEOUT_SECONDS = float(_embedding_timeout_raw)
+
+EMBEDDING_BATCH_SIZE = _env_int("DOC_PARSER_EMBEDDING_BATCH_SIZE", 32)
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY") or os.getenv(
+    "DOC_PARSER_EMBEDDING_API_KEY", ""
+)
+
+# ---------------------------------------------------------------------------
+# LLM / Agent (chat completion via OpenAI-compatible API)
+# ---------------------------------------------------------------------------
+
+LLM_API_URL = os.getenv("LLM_API_URL") or os.getenv("DOC_PARSER_LLM_API_URL", "")
+LLM_MODEL = os.getenv("LLM_MODEL") or os.getenv(
+    "DOC_PARSER_LLM_MODEL", "Qwen3.5-9B-Q4_K_M"
+)
+LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("DOC_PARSER_LLM_API_KEY", "")
+LLM_MAX_TOKENS = _env_int("DOC_PARSER_LLM_MAX_TOKENS", 4096)
+AGENT_MAX_ITERATIONS = _env_int("DOC_PARSER_AGENT_MAX_ITERATIONS", 8)
+AGENT_CONTEXT_BUDGET = _env_int("DOC_PARSER_AGENT_CONTEXT_BUDGET", 400000)
+
+# ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
 

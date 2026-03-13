@@ -43,9 +43,15 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",    # ASGI server
     "python-multipart>=0.0.9",      # File upload support (FastAPI)
 
+    # --- State / Queue / Storage ---
+    "redis>=5.0.0",                 # Redis client for shared job store
+    "pymongo>=4.7.0",               # MongoDB client for document store
+    "chromadb>=0.4.0",              # Vector store for semantic search
+
     # --- Utilities ---
     "pydantic>=2.5.0",              # JSON schema validation
     "python-dotenv>=1.0.0",         # Configuration via .env
+    "httpx>=0.27.0",                # HTTP client (embedding service + healthchecks)
 ]
 
 [project.optional-dependencies]
@@ -58,7 +64,7 @@ dev = [
     "xenon",
     "radon",
     "pytest>=8.0.0",
-    "httpx>=0.27.0",
+    "fakeredis>=2.0.0",
 ]
 # PyTorch with ROCm support (AMD GPU).
 # PEP 621 does not support --index-url; install with:
@@ -73,7 +79,7 @@ torch-rocm = [
 # =============================================================================
 
 [tool.setuptools.packages.find]
-include = ["app*", "src*"]
+include = ["src*"]
 
 [tool.setuptools]
 py-modules = ["config"]
@@ -85,7 +91,7 @@ py-modules = ["config"]
 [tool.ruff]
 target-version = "py312"
 line-length = 88
-src = ["app", "src", "tests", "scripts"]
+src = ["src", "tests", "scripts"]
 
 [tool.ruff.lint]
 select = [
@@ -112,7 +118,7 @@ ignore = [
 "scripts/**" = ["PTH123"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "src", "config"]
+known-first-party = ["src", "config"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 20

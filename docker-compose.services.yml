@@ -1,0 +1,125 @@
+# =============================================================================
+# Docker Compose — Doc Parser services (Redis + MongoDB + ChromaDB + API + Worker)
+#
+# Usage:
+#   docker compose -f docker-compose.services.yml up --build
+#
+# Endpoints:
+#   http://localhost:8090/          — UI upload page
+#   http://localhost:8090/jobs/{id} — UI job status (HTML)
+#   http://localhost:8090/api/jobs  — API (JSON)
+#
+# Host requirements:
+#   - amdgpu driver + ROCm installed
+#   - User in video and render groups
+# =============================================================================
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: doc-parser-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    container_name: doc-parser-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: doc-parser-chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=FALSE
+      - IS_PERSISTENT=TRUE
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: doc-parser-api
+    command: ["uvicorn", "services.app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./data:/app/data
+      - output:/app/output
+      - doctr-cache:/root/.cache
+    depends_on:
+      - redis
+      - mongodb
+      - chromadb
+    env_file:
+      - .env
+    environment:
+      - DOC_PARSER_REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://mongodb:27017
+      - CHROMA_HOST=http://chromadb:8000
+      - EMBEDDING_API_URL=${EMBEDDING_API_URL}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-Qwen3-Embedding}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
+      - LLM_API_URL=${LLM_API_URL}
+      - LLM_MODEL=${LLM_MODEL:-Qwen3.5-9B-Q4_K_M}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0
+      - PYTORCH_HIP_ALLOC_CONF=max_split_size_mb:512
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: doc-parser-worker
+    command: ["python", "-m", "services.worker.run"]
+    volumes:
+      - ./data:/app/data
+      - output:/app/output
+      - doctr-cache:/root/.cache
+
+    # AMD GPU access via ROCm (worker runs OCR)
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - video
+      - render
+    ipc: host
+    security_opt:
+      - seccomp=unconfined
+    shm_size: "8g"
+
+    depends_on:
+      - redis
+      - mongodb
+      - chromadb
+    env_file:
+      - .env
+    environment:
+      - DOC_PARSER_REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://mongodb:27017
+      - CHROMA_HOST=http://chromadb:8000
+      - EMBEDDING_API_URL=${EMBEDDING_API_URL}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-Qwen3-Embedding}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0
+      - PYTORCH_HIP_ALLOC_CONF=max_split_size_mb:512
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  mongo-data:
+  chroma-data:
+  output:
+  doctr-cache:

@@ -14,6 +14,7 @@ Supports parallel processing:
 import logging
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -904,6 +905,97 @@ def process_pdf(
             processor.save_to_searchable_pdf(document, pdf_path, str(pdf_output_path))
 
         return document
+
+    finally:
+        processor.ocr_engine = None
+        processor.tesseract_engine = None
+        gc.collect()
+
+
+# =============================================================================
+# Artifact generation contract (Phase 1 — worker interface)
+# =============================================================================
+
+
+@dataclass
+class ArtifactResult:
+    """Output of the generate_artifacts orchestration function.
+
+    Holds paths to both generated files and the processed Document,
+    serving as the contract between the pipeline and the async worker.
+    """
+
+    json_path: Path
+    pdf_path: Path
+    document: Document
+
+
+def generate_artifacts(
+    pdf_path: str | Path,
+    output_dir: str | Path,
+    *,
+    use_gpu: bool | None = None,
+    extract_tables: bool = True,
+    parallel: bool | None = None,
+) -> ArtifactResult:
+    """High-level orchestration: raw PDF -> searchable PDF + JSON.
+
+    Always generates both artifacts (unlike process_pdf where the
+    searchable PDF is optional).  This is the contract function that
+    the async worker will call.
+
+    Args:
+        pdf_path: path to the raw PDF file.
+        output_dir: directory where artifacts will be written.
+        use_gpu: force GPU on/off (None = auto-detect).
+        extract_tables: attempt table extraction.
+        parallel: force parallel processing on/off (None = config).
+
+    Returns:
+        ArtifactResult with paths to the JSON, searchable PDF and
+        the in-memory Document.
+
+    Raises:
+        FileNotFoundError: if *pdf_path* does not exist.
+    """
+    import gc
+
+    pdf_path = Path(pdf_path)
+    if not pdf_path.exists():
+        raise FileNotFoundError(f"File not found: {pdf_path}")
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    processor = DocumentProcessor(use_gpu=use_gpu)
+
+    try:
+        use_parallel = (
+            parallel
+            if parallel is not None
+            else getattr(config, "PARALLEL_ENABLED", True)
+        )
+
+        if use_parallel:
+            document = processor.process_document_parallel(
+                str(pdf_path), extract_tables=extract_tables
+            )
+        else:
+            document = processor.process_document(
+                str(pdf_path), extract_tables=extract_tables
+            )
+
+        json_path = output_dir / f"{document.doc_id}.json"
+        processor.save_to_json(document, str(json_path))
+
+        pdf_output_path = output_dir / f"{document.doc_id}_searchable.pdf"
+        processor.save_to_searchable_pdf(document, str(pdf_path), str(pdf_output_path))
+
+        return ArtifactResult(
+            json_path=json_path,
+            pdf_path=pdf_output_path,
+            document=document,
+        )
 
     finally:
         processor.ocr_engine = None

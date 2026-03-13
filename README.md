@@ -10,6 +10,9 @@ Local pipeline for text and structure extraction from mixed PDFs (digital and sc
 - **Searchable PDFs**: Invisible text overlay on scanned pages for search/selection
 - **Parallel processing**: Concurrent page processing with `ProcessPoolExecutor`
 - **REST API**: FastAPI endpoints for HTTP-based processing
+- **Async ingest API**: job queue/status API (`/api/jobs`) with worker processing
+- **Redis-backed job store**: shared state between API and worker containers
+- **Semantic search**: chunk indexing in ChromaDB + `POST /api/search`
 - **Docker**: Ready-to-deploy container with ROCm support
 - **Positioning**: Normalized bounding box coordinates (0-1) for each block
 - **OCR post-processing**: Noise removal, error correction, broken word merging
@@ -17,23 +20,27 @@ Local pipeline for text and structure extraction from mixed PDFs (digital and sc
 
 ## Quick Start
 
-### Docker (recommended)
+### Docker (Async services with Redis + ChromaDB) — recommended
 
 ```bash
-docker compose up --build
-
-# Process a PDF
-curl -X POST http://localhost:8000/process \
-  -F "file=@document.pdf" \
-  -o result.json
-
-# Get a searchable PDF back
-curl -X POST "http://localhost:8000/process?response_format=pdf" \
-  -F "file=@document.pdf" \
-  -o searchable.pdf
+docker compose -f docker-compose.services.yml up --build -d
 
 # Health check
-curl http://localhost:8000/health
+curl http://localhost:8090/api/jobs/healthcheck
+
+# 1) Create async job
+JOB_ID=$(
+  curl -sS -X POST http://localhost:8090/api/jobs \
+    -F "file=@document.pdf;type=application/pdf" | jq -r '.job_id'
+)
+
+# 2) Poll job status
+curl -sS "http://localhost:8090/api/jobs/$JOB_ID" | jq
+
+# 3) Semantic search (optionally filter by job_id)
+curl -sS -X POST http://localhost:8090/api/search \
+  -H "content-type: application/json" \
+  -d "{\"query\":\"contrato de locacao\",\"n_results\":5,\"filters\":{\"job_id\":\"$JOB_ID\"}}" | jq
 ```
 
 ### Local Installation
@@ -73,32 +80,37 @@ pip install ".[dev]"
 
 ### REST API
 
-Start the API server:
+Start the combined app:
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+uvicorn services.app:app --host 0.0.0.0 --port 8080 --workers 1
 ```
 
-> **Note:** Use `--workers 1` because the OCR model is loaded once on the GPU; multiple workers would duplicate the model and waste VRAM.
+> Note: use `--workers 1` when OCR model is GPU-loaded to avoid duplicated VRAM usage.
 
 #### Endpoints
 
-| Method | Endpoint   | Description                               |
-|--------|------------|-------------------------------------------|
-| POST   | `/process` | Process a PDF and return JSON or searchable PDF |
-| GET    | `/health`  | Service health check (status, GPU, OCR engine) |
-| GET    | `/info`    | Current pipeline configuration             |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/jobs` | Upload PDF and create processing job |
+| GET | `/api/jobs/{job_id}` | Get job status |
+| GET | `/api/jobs/healthcheck` | Ingest API healthcheck |
+| POST | `/api/search` | Semantic search over indexed chunks |
+| GET | `/` | Upload UI |
+| GET | `/jobs/{job_id}` | Job status UI |
 
-#### `POST /process` Parameters
+#### `POST /api/search` payload
 
-| Parameter        | Type   | Default | Description                          |
-|------------------|--------|---------|--------------------------------------|
-| `file`           | file   | required | PDF file to process                 |
-| `response_format`| string | `json`  | `json` or `pdf` (searchable PDF)    |
-| `extract_tables` | bool   | `true`  | Enable table extraction              |
-| `min_confidence` | float  | —       | Minimum OCR confidence (0.0–1.0)    |
-| `ocr_postprocess`| bool   | —       | Enable OCR text post-processing     |
-| `ocr_fix_errors` | bool   | —       | Fix common OCR errors               |
+```bash
+curl -X POST http://localhost:8080/api/search \
+  -H "content-type: application/json" \
+  -d '{
+    "query": "texto da consulta",
+    "n_results": 10,
+    "filters": {"job_id": "optional-job-id"},
+    "min_similarity": 0.7
+  }'
+```
 
 ### CLI
 
@@ -212,6 +224,12 @@ cp .env.example .env
 | `DOC_PARSER_OCR_FIX_ERRORS` | `true` | Fix common OCR errors |
 | `DOC_PARSER_VERBOSE` | `true` | Verbose logging output |
 | `DOC_PARSER_OUTPUT_DIR` | `./output` | Default output directory |
+| `DOC_PARSER_REDIS_URL` | empty | Redis URL for async job store |
+| `CHROMA_HOST` / `DOC_PARSER_CHROMA_HOST` | empty | ChromaDB host URL (e.g. `http://chromadb:8000`) |
+| `CHROMA_COLLECTION` / `DOC_PARSER_CHROMA_COLLECTION` | `document_embeddings` | Chroma collection name |
+| `EMBEDDING_API_URL` / `DOC_PARSER_EMBEDDING_API_URL` | empty | Remote embedding API base URL |
+| `EMBEDDING_MODEL` / `DOC_PARSER_EMBEDDING_MODEL` | `Qwen3-Embedding` | Embedding model name |
+| `EMBEDDING_TIMEOUT_SECONDS` / `DOC_PARSER_EMBEDDING_TIMEOUT_SECONDS` | `10` | Embedding API timeout |
 
 See `config.py` for the full list of available settings.
 
@@ -219,12 +237,12 @@ See `config.py` for the full list of available settings.
 
 ```
 doc_parser/
-├── app/                          # FastAPI application
-│   ├── main.py                   # App factory and lifespan
-│   ├── dependencies.py           # Dependency injection
-│   ├── schemas.py                # API request/response schemas
-│   └── routers/
-│       └── process.py            # API endpoints
+├── services/                     # Async API, UI, worker, search
+│   ├── app.py                    # Combined FastAPI app factory
+│   ├── ingest_api/               # Job queue API (/api/jobs, /api/search)
+│   ├── ingest_ui/                # Upload & status UI (/, /jobs/{id})
+│   ├── worker/                   # OCR worker polling Redis
+│   └── search/                   # Semantic search (ChromaDB + embeddings)
 ├── src/                          # Core processing pipeline
 │   ├── pipeline.py               # Main orchestrator (sequential + parallel)
 │   ├── detector.py               # Page type detection (digital/scan/hybrid)
@@ -246,15 +264,11 @@ doc_parser/
 ├── scripts/
 │   ├── process_single.py         # CLI for single PDF processing
 │   └── check_setup.py            # Environment verification
-├── tests/
-│   ├── conftest.py               # Shared test fixtures
-│   ├── test_api.py               # API endpoint tests
-│   ├── test_config.py            # Configuration tests
-│   └── test_searchable_pdf.py    # Searchable PDF tests
+├── tests/                        # Test suite
 ├── config.py                     # Global configuration
 ├── pyproject.toml                # Dependencies, build config, tool settings
 ├── Dockerfile                    # Docker image (ROCm)
-└── docker-compose.yml            # Docker Compose setup
+└── docker-compose.services.yml   # Docker Compose (Redis + ChromaDB + API + Worker)
 ```
 
 ## Testing
@@ -265,9 +279,6 @@ pytest
 
 # Run with verbose output
 pytest -v
-
-# Run a specific test module
-pytest tests/test_api.py
 ```
 
 ## Docker
@@ -275,17 +286,13 @@ pytest tests/test_api.py
 The Docker image is based on the official AMD ROCm PyTorch image and includes all system dependencies.
 
 ```bash
-# Build and start
-docker compose up --build
-
-# Run in background
-docker compose up -d --build
+docker compose -f docker-compose.services.yml up --build
 
 # View logs
-docker compose logs -f
+docker compose -f docker-compose.services.yml logs -f
 
 # Stop
-docker compose down
+docker compose -f docker-compose.services.yml down
 ```
 
 **Host requirements for GPU support:**

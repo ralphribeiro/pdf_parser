@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pypdf
 import pytest
 
-from src.models.schemas import Block, BlockType, Page
+from src.models.schemas import Block, BlockType, Document, Page
 
 # =========================================================================
 # Cycle 1: _create_text_overlay
@@ -1049,6 +1049,281 @@ class TestConfigOrientation:
         import config
 
         assert config.STRAIGHTEN_PAGES is True
+
+
+# =========================================================================
+# Cycle C2: DocTREngine uses orientation config
+# =========================================================================
+
+
+# =========================================================================
+# Cycle T1: Table block rendering in text layer
+# =========================================================================
+
+
+class TestTableBlockOverlay:
+    """Tests for table block rendering with row/cell data in text layer.
+
+    Table blocks (type=TABLE, rows=[[...]]) should have their content
+    serialised per-row in the invisible text layer so that each cell
+    value is individually searchable without altering the visual layout.
+    """
+
+    def _make_page_with_table(self):
+        """Create OCR page with one table block containing rows data."""
+        return Page(
+            page=1,
+            source="ocr",
+            blocks=[
+                Block(
+                    block_id="p1_b1",
+                    type=BlockType.TABLE,
+                    text=None,
+                    bbox=[0.1, 0.3, 0.9, 0.7],
+                    confidence=0.95,
+                    rows=[
+                        ["Nome", "Cargo", "Salário"],
+                        ["João", "Gerente", "5000"],
+                        ["Maria", "Diretora", "8000"],
+                    ],
+                ),
+            ],
+            width=595.0,
+            height=842.0,
+        )
+
+    def test_table_produces_valid_pdf(self):
+        """Table rendering should produce a valid single-page PDF."""
+        from src.exporters.searchable_pdf import _create_text_overlay
+
+        page = self._make_page_with_table()
+        result = _create_text_overlay(page, 595.0, 842.0)
+
+        assert result[:5] == b"%PDF-"
+
+        reader = pypdf.PdfReader(io.BytesIO(result))
+        assert len(reader.pages) == 1
+
+    def test_table_rows_text_extractable(self):
+        """Table with rows data should produce extractable text."""
+        import pdfplumber
+
+        from src.exporters.searchable_pdf import _create_text_overlay
+
+        page = self._make_page_with_table()
+        result = _create_text_overlay(page, 595.0, 842.0)
+
+        with pdfplumber.open(io.BytesIO(result)) as pdf:
+            text = pdf.pages[0].extract_text() or ""
+
+        assert "Nome" in text
+        assert "Cargo" in text
+
+    def test_table_cells_individually_searchable(self):
+        """Individual cell values should appear in extracted text."""
+        import pdfplumber
+
+        from src.exporters.searchable_pdf import _create_text_overlay
+
+        page = self._make_page_with_table()
+        result = _create_text_overlay(page, 595.0, 842.0)
+
+        with pdfplumber.open(io.BytesIO(result)) as pdf:
+            text = pdf.pages[0].extract_text() or ""
+
+        assert "João" in text
+        assert "Gerente" in text
+        assert "5000" in text
+        assert "Maria" in text
+        assert "Diretora" in text
+        assert "8000" in text
+
+    def test_table_rows_on_distinct_y_positions(self):
+        """Each row should be rendered at a distinct Y position."""
+        import pdfplumber
+
+        from src.exporters.searchable_pdf import _create_text_overlay
+
+        page = self._make_page_with_table()
+        result = _create_text_overlay(page, 595.0, 842.0)
+
+        with pdfplumber.open(io.BytesIO(result)) as pdf:
+            chars = pdf.pages[0].chars
+
+        assert chars, "Table overlay should produce characters"
+
+        y_positions = set()
+        for ch in chars:
+            y_positions.add(round(ch["top"], 0))
+        assert len(y_positions) >= 3, (
+            f"Expected >= 3 distinct Y positions for 3 rows, got {len(y_positions)}"
+        )
+
+    def test_table_empty_cells_handled(self):
+        """Table with empty cells should not break rendering."""
+        import pdfplumber
+
+        from src.exporters.searchable_pdf import _create_text_overlay
+
+        page = Page(
+            page=1,
+            source="ocr",
+            blocks=[
+                Block(
+                    block_id="p1_b1",
+                    type=BlockType.TABLE,
+                    text=None,
+                    bbox=[0.1, 0.3, 0.9, 0.7],
+                    rows=[
+                        ["Header", "", "Value"],
+                        ["", "Data", ""],
+                    ],
+                ),
+            ],
+            width=595.0,
+            height=842.0,
+        )
+        result = _create_text_overlay(page, 595.0, 842.0)
+
+        assert result[:5] == b"%PDF-"
+
+        with pdfplumber.open(io.BytesIO(result)) as pdf:
+            text = pdf.pages[0].extract_text() or ""
+
+        assert "Header" in text
+        assert "Value" in text
+        assert "Data" in text
+
+    def test_table_without_rows_falls_back_to_text(self):
+        """Table block without rows but with text should use fallback rendering."""
+        import pdfplumber
+
+        from src.exporters.searchable_pdf import _create_text_overlay
+
+        page = Page(
+            page=1,
+            source="ocr",
+            blocks=[
+                Block(
+                    block_id="p1_b1",
+                    type=BlockType.TABLE,
+                    text="Fallback table text\nSecond row text",
+                    bbox=[0.1, 0.3, 0.9, 0.6],
+                    rows=None,
+                ),
+            ],
+            width=595.0,
+            height=842.0,
+        )
+        result = _create_text_overlay(page, 595.0, 842.0)
+
+        with pdfplumber.open(io.BytesIO(result)) as pdf:
+            text = pdf.pages[0].extract_text() or ""
+
+        assert "Fallback table text" in text
+        assert "Second row text" in text
+
+    def test_mixed_paragraph_and_table_blocks(self):
+        """Both paragraph and table blocks should be rendered on the same page."""
+        import pdfplumber
+
+        from src.exporters.searchable_pdf import _create_text_overlay
+
+        page = Page(
+            page=1,
+            source="ocr",
+            blocks=[
+                Block(
+                    block_id="p1_b1",
+                    type=BlockType.PARAGRAPH,
+                    text="Paragraph text above table",
+                    bbox=[0.1, 0.05, 0.9, 0.15],
+                    confidence=0.9,
+                    lines=[
+                        {
+                            "text": "Paragraph text above table",
+                            "bbox": [0.1, 0.05, 0.9, 0.15],
+                        },
+                    ],
+                ),
+                Block(
+                    block_id="p1_b2",
+                    type=BlockType.TABLE,
+                    text=None,
+                    bbox=[0.1, 0.20, 0.9, 0.50],
+                    rows=[
+                        ["Col1", "Col2"],
+                        ["Val1", "Val2"],
+                    ],
+                ),
+            ],
+            width=595.0,
+            height=842.0,
+        )
+        result = _create_text_overlay(page, 595.0, 842.0)
+
+        with pdfplumber.open(io.BytesIO(result)) as pdf:
+            text = pdf.pages[0].extract_text() or ""
+
+        assert "Paragraph text above table" in text
+        assert "Col1" in text
+        assert "Col2" in text
+        assert "Val1" in text
+        assert "Val2" in text
+
+
+# =========================================================================
+# Cycle T2: Table rendering in create_searchable_pdf (integration)
+# =========================================================================
+
+
+class TestTableInSearchablePdf:
+    """Integration test: table data should be searchable in the final PDF."""
+
+    def test_searchable_pdf_contains_table_data(self, sample_pdf_path, output_dir):
+        """Table rows should be extractable from the full searchable PDF."""
+        import pdfplumber
+
+        from src.exporters.searchable_pdf import create_searchable_pdf
+
+        doc = Document(
+            doc_id="test-table",
+            source_file="test.pdf",
+            total_pages=3,
+            pages=[
+                Page(page=1, source="digital", blocks=[], width=595.0, height=842.0),
+                Page(page=2, source="digital", blocks=[], width=595.0, height=842.0),
+                Page(
+                    page=3,
+                    source="ocr",
+                    blocks=[
+                        Block(
+                            block_id="p3_b1",
+                            type=BlockType.TABLE,
+                            text=None,
+                            bbox=[0.1, 0.1, 0.9, 0.5],
+                            rows=[
+                                ["Produto", "Preço"],
+                                ["Café", "10.00"],
+                                ["Pão", "5.50"],
+                            ],
+                        ),
+                    ],
+                    width=595.0,
+                    height=842.0,
+                ),
+            ],
+        )
+
+        output_path = output_dir / "searchable_table.pdf"
+        create_searchable_pdf(str(sample_pdf_path), doc, str(output_path))
+
+        with pdfplumber.open(str(output_path)) as pdf:
+            text_p3 = pdf.pages[2].extract_text() or ""
+
+        assert "Produto" in text_p3
+        assert "Café" in text_p3
+        assert "10.00" in text_p3
 
 
 # =========================================================================
