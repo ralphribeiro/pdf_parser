@@ -235,7 +235,7 @@ class TestSearchPage:
 
 
 class TestAgentPage:
-    """GET /agent should render an agent search form."""
+    """GET /agent should render an agent search form with markdown support."""
 
     def test_returns_200(self, tmp_path):
         app, _ = _make_app(tmp_path)
@@ -256,6 +256,16 @@ class TestAgentPage:
         app, _ = _make_app(tmp_path)
         html = TestClient(app).get("/agent").text.lower()
         assert "<button" in html
+
+    def test_includes_markdown_library(self, tmp_path):
+        app, _ = _make_app(tmp_path)
+        html = TestClient(app).get("/agent").text
+        assert "marked" in html
+
+    def test_renders_answer_as_markdown(self, tmp_path):
+        app, _ = _make_app(tmp_path)
+        html = TestClient(app).get("/agent").text
+        assert "marked.parse" in html
 
 
 # =========================================================================

@@ -28,6 +28,7 @@ from services.ingest_api.schemas import (
     JobListResponse,
     SearchRequest,
     SearchResponse,
+    SearchResult,
 )
 from services.ingest_api.store import JobStore
 
@@ -74,6 +75,24 @@ def _with_max_iterations(runner: Any, max_iterations: int) -> Any:
 def _compute_hash(content: bytes) -> str:
     """Return SHA-256 hex digest of in-memory content."""
     return hashlib.sha256(content).hexdigest()
+
+
+def _enrich_source_files(
+    results: list[SearchResult], doc_store: Any
+) -> list[SearchResult]:
+    """Replace hash-based source_file with the original filename."""
+    cache: dict[str, str] = {}
+    enriched: list[SearchResult] = []
+    for r in results:
+        doc_id = r.document_id
+        if doc_id and doc_id not in cache:
+            doc = doc_store.get_document(doc_id)
+            cache[doc_id] = (doc.get("filename") or "") if doc else ""
+        fname = cache.get(doc_id, "")
+        if fname:
+            r = r.model_copy(update={"source_file": fname})
+        enriched.append(r)
+    return enriched
 
 
 def _register_routes(app: FastAPI) -> None:
@@ -251,6 +270,11 @@ def _register_search_routes(app: FastAPI) -> None:
             min_similarity=payload.min_similarity,
         )
         elapsed_ms = int((time.monotonic() - started) * 1000)
+
+        doc_store = request.app.state.document_store
+        if doc_store is not None:
+            results = _enrich_source_files(results, doc_store)
+
         return SearchResponse(
             results=results,
             total_matches=len(results),

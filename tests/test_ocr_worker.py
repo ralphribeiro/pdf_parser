@@ -244,6 +244,40 @@ class TestOcrWorkerProcessJob:
         args = indexer.index_document.call_args.args
         assert args[0] == job.job_id
 
+    def test_indexed_document_has_original_filename(self, tmp_path):
+        from src.models.schemas import Document, Page
+        from src.pipeline import ArtifactResult
+
+        store = JobStore()
+        indexer = MagicMock()
+
+        def _artifacts_with_hash_name(pdf_path, output_dir, **kwargs):
+            json_p = Path(output_dir) / "test.json"
+            pdf_p = Path(output_dir) / "test_searchable.pdf"
+            json_p.write_text("{}")
+            pdf_p.write_bytes(b"%PDF-1.4 fake searchable")
+            doc = Document(
+                doc_id="d1",
+                source_file=pdf_path.name,
+                total_pages=1,
+                pages=[Page(page=1, source="digital", blocks=[])],
+            )
+            return ArtifactResult(json_path=json_p, pdf_path=pdf_p, document=doc)
+
+        worker = self._make_worker(
+            store,
+            tmp_path,
+            artifact_fn=_artifacts_with_hash_name,
+            semantic_indexer=indexer,
+        )
+        job = self._seed_job(store, worker.upload_dir)
+
+        worker.process_job(job.job_id)
+
+        indexer.index_document.assert_called_once()
+        doc = indexer.index_document.call_args.args[1]
+        assert doc.source_file == "sample.pdf"
+
     def test_index_error_is_nonfatal(self, tmp_path):
         """Indexing failure must not prevent job UPLOADED."""
         store = JobStore()

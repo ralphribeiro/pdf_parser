@@ -145,10 +145,11 @@ def search_chunks(
         if doc_id and doc_id not in filename_cache:
             doc = document_store.get_document(doc_id) if document_store else None
             filename_cache[doc_id] = (doc.get("filename") or "") if doc else ""
+        fname = filename_cache.get(doc_id, "") or r.source_file
         entry = {
             "chunk_id": r.chunk_id,
             "document_id": doc_id,
-            "filename": filename_cache.get(doc_id, ""),
+            "filename": fname,
             "page": r.page_number,
             "similarity": r.similarity,
             "text": r.text,

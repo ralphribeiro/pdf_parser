@@ -209,6 +209,20 @@ _STYLE = """
   .empty { color: #6c757d; font-style: italic; padding: 1rem 0; }
   pre.json { background: #f1f3f5; padding: 1rem; border-radius: var(--radius);
              overflow-x: auto; font-size: .8rem; max-height: 500px; }
+  .md-body h1,.md-body h2,.md-body h3 {
+    margin: 1rem 0 .5rem; }
+  .md-body p { margin: .5rem 0; line-height: 1.6; }
+  .md-body ul,.md-body ol { margin: .5rem 0 .5rem 1.5rem; }
+  .md-body li { margin: .25rem 0; }
+  .md-body code { background: #f1f3f5; padding: .15rem .4rem;
+                  border-radius: 3px; font-size: .88em; }
+  .md-body pre { background: #f1f3f5; padding: 1rem;
+                 border-radius: var(--radius); overflow-x: auto;
+                 margin: .5rem 0; }
+  .md-body pre code { background: none; padding: 0; }
+  .md-body blockquote { border-left: 3px solid var(--accent);
+                        margin: .5rem 0; padding: .5rem 1rem;
+                        color: #6c757d; }
   .meta { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem;
           font-size: .9rem; color: #6c757d; }
 </style>
@@ -363,30 +377,47 @@ def _render_agent_page() -> str:
         '<button type="submit">Perguntar</button>'
         "</form>"
         '<div id="results"></div>'
+        '<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js">'
+        "</script>"
         "<script>"
-        "document.getElementById('agent-form').addEventListener('submit',async e=>{"
+        "document.getElementById('agent-form')"
+        ".addEventListener('submit',async e=>{"
         "e.preventDefault();"
         "const q=document.getElementById('query').value;"
         "const r=document.getElementById('results');"
-        "r.innerHTML='<p>Processando\u2026 isso pode levar alguns segundos.</p>';"
+        "r.innerHTML='<p>Processando\u2026 isso pode levar"
+        " alguns segundos.</p>';"
         "try{"
-        "const resp=await fetch('/api/agent/search',{method:'POST',"
+        "const resp=await fetch('/api/agent/search',"
+        "{method:'POST',"
         "headers:{'Content-Type':'application/json'},"
         "body:JSON.stringify({query:q})});"
         "const data=await resp.json();"
-        "if(!resp.ok){r.innerHTML='<div class=\"error\">'+data.detail+'</div>';return;}"
-        "let h='<div class=\"card\"><h2>Resposta</h2><p>'+data.answer+'</p>';"
+        "if(!resp.ok){"
+        'r.innerHTML=\'<div class="error">'
+        "'+data.detail+'</div>';return;}"
+        "const md=marked.parse(data.answer||'');"
+        'let h=\'<div class="card">'
+        "<h2>Resposta</h2>"
+        "<div class=\"md-body\">'+md+'</div>';"
         "if(data.sources.length){"
-        "h+='<h2 style=\"margin-top:1rem\">Fontes</h2><table>';"
-        "h+='<tr><th>Documento</th><th>P\u00e1g.</th><th>Trecho</th></tr>';"
+        'h+=\'<h2 style="margin-top:1rem">'
+        "Fontes</h2><table>';"
+        "h+='<tr><th>Documento</th>"
+        "<th>P\u00e1g.</th><th>Trecho</th></tr>';"
         "data.sources.forEach(s=>{"
-        "h+='<tr><td>'+s.filename+'</td><td>'+s.page+'</td>'"
-        "+'<td>'+s.text.substring(0,150)+'</td></tr>';});"
+        "h+='<tr><td>'+s.filename+'</td>"
+        "<td>'+s.page+'</td>'"
+        "+'<td>'+s.text.substring(0,150)"
+        "+'</td></tr>';});"
         "h+='</table>';}"
-        "h+='<p class=\"detail\">'+data.iterations+' itera\u00e7\u00f5es, '"
+        'h+=\'<p class="detail">'
+        "'+data.iterations+' itera\u00e7\u00f5es, '"
         "+data.processing_time_ms+'ms</p></div>';"
         "r.innerHTML=h;"
-        "}catch(err){r.innerHTML='<div class=\"error\">'+err.message+'</div>';}"
+        "}catch(err){"
+        'r.innerHTML=\'<div class="error">'
+        "'+err.message+'</div>';}"
         "});"
         "</script>"
     )
