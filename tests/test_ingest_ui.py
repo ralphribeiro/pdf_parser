@@ -39,26 +39,26 @@ def _make_app(tmp_path, store=None):
 
 
 class TestUploadPage:
-    """GET / should render an HTML upload form."""
+    """GET /upload should render an HTML upload form."""
 
     def test_returns_200(self, tmp_path):
         app, _ = _make_app(tmp_path)
-        resp = TestClient(app).get("/")
+        resp = TestClient(app).get("/upload")
         assert resp.status_code == 200
 
     def test_returns_html(self, tmp_path):
         app, _ = _make_app(tmp_path)
-        resp = TestClient(app).get("/")
+        resp = TestClient(app).get("/upload")
         assert "text/html" in resp.headers["content-type"]
 
     def test_has_file_input(self, tmp_path):
         app, _ = _make_app(tmp_path)
-        resp = TestClient(app).get("/")
+        resp = TestClient(app).get("/upload")
         assert 'type="file"' in resp.text
 
     def test_has_multipart_form(self, tmp_path):
         app, _ = _make_app(tmp_path)
-        resp = TestClient(app).get("/")
+        resp = TestClient(app).get("/upload")
         html = resp.text.lower()
         assert "<form" in html
         assert 'method="post"' in html

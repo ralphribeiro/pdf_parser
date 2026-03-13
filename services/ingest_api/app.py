@@ -22,7 +22,10 @@ from services.ingest_api.schemas import (
     AgentSearchRequest,
     AgentSearchResponse,
     AgentSource,
+    DocumentListResponse,
+    DocumentSummary,
     Job,
+    JobListResponse,
     SearchRequest,
     SearchResponse,
 )
@@ -74,9 +77,30 @@ def _compute_hash(content: bytes) -> str:
 
 
 def _register_routes(app: FastAPI) -> None:
+    _register_job_routes(app)
+    _register_document_routes(app)
+    _register_search_routes(app)
+
+
+def _register_job_routes(app: FastAPI) -> None:
     @app.get("/jobs/healthcheck", summary="Healthcheck")
     async def jobs_healthcheck() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get(
+        "/jobs",
+        response_model=JobListResponse,
+        summary="List all jobs with pagination",
+    )
+    async def list_jobs(
+        request: Request,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> JobListResponse:
+        store: JobStore = request.app.state.store
+        items = store.list_all(limit=limit, offset=offset)
+        total = store.count()
+        return JobListResponse(items=items, total=total, limit=limit, offset=offset)
 
     @app.post(
         "/jobs",
@@ -147,6 +171,65 @@ def _register_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=404, detail="Job not found")
         return job
 
+
+def _register_document_routes(app: FastAPI) -> None:
+    @app.get(
+        "/documents/{document_id}",
+        summary="Retrieve parsed document from MongoDB",
+        responses={
+            404: {"description": "Document not found"},
+            503: {"description": "Document store not configured"},
+        },
+    )
+    async def get_document(document_id: str, request: Request) -> dict:
+        doc_store = request.app.state.document_store
+        if doc_store is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Document store is not configured",
+            )
+        doc = doc_store.get_document(document_id)
+        if doc is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        doc["_id"] = str(doc["_id"])
+        return doc
+
+    @app.get(
+        "/documents",
+        response_model=DocumentListResponse,
+        summary="List all documents with pagination",
+        responses={503: {"description": "Document store not configured"}},
+    )
+    async def list_documents(
+        request: Request,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> DocumentListResponse:
+        doc_store = request.app.state.document_store
+        if doc_store is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Document store is not configured",
+            )
+        total = doc_store.count_documents()
+        raw = doc_store.list_documents(limit=limit, offset=offset)
+        items = [
+            DocumentSummary(
+                document_id=d["_id"],
+                filename=d["filename"],
+                status=d["status"],
+                total_pages=d.get("total_pages"),
+                created_at=d["created_at"],
+                file_size=d.get("file_size", 0),
+            )
+            for d in raw
+        ]
+        return DocumentListResponse(
+            items=items, total=total, limit=limit, offset=offset
+        )
+
+
+def _register_search_routes(app: FastAPI) -> None:
     @app.post(
         "/search",
         response_model=SearchResponse,
@@ -173,27 +256,6 @@ def _register_routes(app: FastAPI) -> None:
             total_matches=len(results),
             processing_time_ms=elapsed_ms,
         )
-
-    @app.get(
-        "/documents/{document_id}",
-        summary="Retrieve parsed document from MongoDB",
-        responses={
-            404: {"description": "Document not found"},
-            503: {"description": "Document store not configured"},
-        },
-    )
-    async def get_document(document_id: str, request: Request) -> dict:
-        doc_store = request.app.state.document_store
-        if doc_store is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Document store is not configured",
-            )
-        doc = doc_store.get_document(document_id)
-        if doc is None:
-            raise HTTPException(status_code=404, detail="Document not found")
-        doc["_id"] = str(doc["_id"])
-        return doc
 
     @app.post(
         "/agent/search",
