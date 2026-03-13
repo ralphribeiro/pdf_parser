@@ -8,12 +8,18 @@ Este é um pipeline de processamento de documentos PDF para extração de texto 
 
 ```
 doc_parser/
-├── services/                     # API assíncrona, UI, worker, search
-│   ├── app.py                    # App factory combinada (API + UI)
-│   ├── ingest_api/               # API de jobs (/api/jobs, /api/search)
+├── services/                     # API assíncrona, UI, worker, search, agent
+│   ├── app.py                    # App factory combinada (API + UI + Agent)
+│   ├── document_store.py         # MongoDB: persistência de documentos
+│   ├── ingest_api/               # API de jobs (/api/jobs, /api/search, /api/agent)
 │   ├── ingest_ui/                # UI de upload e status (/, /jobs/{id})
 │   ├── worker/                   # Worker OCR polling Redis
-│   └── search/                   # Busca semântica (ChromaDB + embeddings)
+│   ├── search/                   # Busca semântica (ChromaDB + embeddings)
+│   └── agent/                    # Agente AI de busca enriquecida
+│       ├── agent.py              # Loop ReAct com budget tracking
+│       ├── llm_client.py         # Client HTTP para /v1/chat/completions
+│       ├── tools.py              # Ferramentas do agente (search, get_doc, etc.)
+│       └── prompts.py            # System prompt e constantes
 ├── src/                          # Pipeline de processamento principal
 │   ├── pipeline.py               # Orquestrador principal (sequencial + paralela)
 │   ├── detector.py               # Detecção de tipo de página (digital/scan/hybrid)
@@ -37,7 +43,7 @@ doc_parser/
 │   └── llm_postprocess.py        # Pós-processamento de OCR via LLM (Ollama)
 ├── config.py                     # Configuração global
 ├── pyproject.toml                # Dependências e configurações
-├── docker-compose.services.yml   # Docker Compose (Redis + ChromaDB + API + Worker)
+├── docker-compose.services.yml   # Docker Compose (Redis + MongoDB + ChromaDB + API + Worker)
 └── tests/                        # Suite de testes
 ```
 
@@ -93,6 +99,21 @@ Todas as configurações são controladas via variáveis de ambiente com prefixo
 | `DOC_PARSER_DETECT_ORIENTATION` | `true` | Detectar orientação |
 | `DOC_PARSER_STRAIGHTEN_PAGES` | `true` | Corrigir inclinação |
 
+**Serviços externos e persistência:**
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `MONGO_URL` | `mongodb://mongodb:27017` | URI do MongoDB |
+| `MONGO_DB` | `doc_parser` | Nome do banco MongoDB |
+| `EMBEDDING_API_URL` | (obrigatória) | URL da API de embeddings (llama.cpp) |
+| `EMBEDDING_MODEL` | `Qwen3-Embedding` | Modelo de embeddings |
+| `EMBEDDING_API_KEY` | (vazio) | API key para serviço de embeddings externo |
+| `LLM_API_URL` | (vazio) | URL da API LLM (habilita agente AI) |
+| `LLM_MODEL` | `Qwen3.5-9B-Q4_K_M` | Modelo LLM para o agente |
+| `LLM_API_KEY` | (vazio) | API key para serviço LLM externo |
+| `CHROMADB_HOST` | `http://chromadb:8000` | URL do ChromaDB |
+| `REDIS_URL` | `redis://redis:6379/0` | URL do Redis |
+
 ### Criando o arquivo `.env`
 
 ```bash
@@ -146,14 +167,16 @@ uvicorn services.app:app --host 0.0.0.0 --port 8080 --workers 1
 
 #### Endpoints
 
-| Método | Endpoint               | Descrição |
-|--------|------------------------|-----------|
-| POST   | `/api/jobs`            | Upload de PDF e criação de job |
-| GET    | `/api/jobs/{job_id}`   | Status do job |
-| GET    | `/api/jobs/healthcheck`| Health check da API |
-| POST   | `/api/search`          | Busca semântica sobre chunks indexados |
-| GET    | `/`                    | UI de upload |
-| GET    | `/jobs/{job_id}`       | UI de status do job |
+| Método | Endpoint                   | Descrição |
+|--------|----------------------------|-----------|
+| POST   | `/api/jobs`                | Upload de PDF e criação de job |
+| GET    | `/api/jobs/{job_id}`       | Status do job |
+| GET    | `/api/jobs/healthcheck`    | Health check da API |
+| POST   | `/api/search`              | Busca semântica sobre chunks indexados |
+| GET    | `/api/documents/{id}`      | Documento parseado (MongoDB) |
+| POST   | `/api/agent/search`        | Busca enriquecida via agente AI |
+| GET    | `/`                        | UI de upload |
+| GET    | `/jobs/{job_id}`           | UI de status do job |
 
 ### CLI
 
@@ -281,11 +304,14 @@ pytest -v
 
 ## Roadmap
 
-1. Melhor detecção de tabelas em PDFs digitalizados
-2. Detecção e classificação de assinaturas
-3. Chunking inteligente para embeddings
-4. Pipeline de vetorização (embeddings)
-5. Processamento em lote de múltiplos PDFs
+- [x] Pipeline de vetorização (embeddings via ChromaDB)
+- [x] Processamento assíncrono de jobs (Redis + Worker)
+- [x] Persistência de documentos (MongoDB)
+- [x] Busca semântica sobre chunks indexados
+- [x] Agente AI para busca enriquecida (ReAct loop)
+- [ ] Melhor detecção de tabelas em PDFs digitalizados
+- [ ] Detecção e classificação de assinaturas
+- [ ] Processamento em lote de múltiplos PDFs
 
 ## Performance
 

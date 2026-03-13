@@ -112,7 +112,7 @@ check_env_vars() {
     if [ -z "${EMBEDDING_API_URL:-}" ]; then
         warn "EMBEDDING_API_URL não definida."
         warn "A busca semântica não funcionará sem um serviço de embeddings."
-        warn "Exemplo: EMBEDDING_API_URL=http://localhost:11434/api/embed"
+        warn "Exemplo: EMBEDDING_API_URL=http://192.168.0.25:8080"
         missing=1
     else
         ok "EMBEDDING_API_URL=${EMBEDDING_API_URL}"
@@ -120,6 +120,15 @@ check_env_vars() {
 
     EMBEDDING_MODEL="${EMBEDDING_MODEL:-Qwen3-Embedding}"
     ok "EMBEDDING_MODEL=${EMBEDDING_MODEL}"
+
+    # LLM (agente AI)
+    if [ -z "${LLM_API_URL:-}" ]; then
+        warn "LLM_API_URL não definida."
+        warn "O agente de busca enriquecida (/api/agent/search) ficará desabilitado."
+    else
+        ok "LLM_API_URL=${LLM_API_URL}"
+        ok "LLM_MODEL=${LLM_MODEL:-Qwen3.5-9B-Q4_K_M}"
+    fi
 
     if [ $missing -eq 1 ]; then
         warn "Variáveis opcionais ausentes. O deploy continuará, mas algumas features podem não funcionar."
@@ -250,11 +259,12 @@ print_summary() {
 
     echo ""
     echo -e "${BOLD}Endpoints disponíveis:${NC}"
-    echo "  UI (upload):      http://localhost:8090/"
-    echo "  API (jobs):       http://localhost:8090/api/jobs"
-    echo "  API (search):     http://localhost:8090/api/search"
-    echo "  API (documents):  http://localhost:8090/api/documents/{id}"
-    echo "  API (health):     http://localhost:8090/api/jobs/healthcheck"
+    echo "  UI (upload):       http://localhost:8090/"
+    echo "  API (jobs):        http://localhost:8090/api/jobs"
+    echo "  API (search):      http://localhost:8090/api/search"
+    echo "  API (agent):       http://localhost:8090/api/agent/search"
+    echo "  API (documents):   http://localhost:8090/api/documents/{id}"
+    echo "  API (health):      http://localhost:8090/api/jobs/healthcheck"
     echo ""
     echo -e "${BOLD}Fluxo de uso:${NC}"
     echo "  1. Upload:    curl -X POST http://localhost:8090/api/jobs -F 'file=@documento.pdf'"
@@ -263,6 +273,9 @@ print_summary() {
     echo "  4. Busca:     curl -X POST http://localhost:8090/api/search \\"
     echo "                  -H 'Content-Type: application/json' \\"
     echo "                  -d '{\"query\": \"texto de busca\"}'"
+    echo "  5. Agente:    curl -X POST http://localhost:8090/api/agent/search \\"
+    echo "                  -H 'Content-Type: application/json' \\"
+    echo "                  -d '{\"query\": \"buscar info sobre X\"}'"
     echo ""
     echo -e "${BOLD}Comandos úteis:${NC}"
     echo "  Logs (todos):    docker compose -f ${COMPOSE_FILE} logs -f"
