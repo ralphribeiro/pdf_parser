@@ -205,8 +205,13 @@ def search_document_text(
     document_store: Any,
     *,
     document_id: str,
-    keyword: str,
+    keyword: str = "",
+    query: str = "",
 ) -> str:
+    keyword = keyword or query
+    if not keyword:
+        return "Erro: parametro 'keyword' é obrigatorio."
+
     doc = document_store.get_document(document_id)
     if doc is None:
         return f"Documento nao encontrado: {document_id}"
@@ -251,5 +256,9 @@ class ToolRegistry:
             return f"Ferramenta desconhecida: {tool_name}"
 
         logger.info("Executing tool %s with args %s", tool_name, arguments)
-        result = func(self.search_service, self.document_store, **arguments)
+        try:
+            result = func(self.search_service, self.document_store, **arguments)
+        except TypeError as exc:
+            logger.warning("Tool %s call failed: %s", tool_name, exc)
+            return f"Erro ao chamar {tool_name}: {exc}"
         return _truncate(result, max_chars)
