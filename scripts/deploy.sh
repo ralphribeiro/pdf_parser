@@ -19,7 +19,7 @@ set -euo pipefail
 # Configuração
 # ---------------------------------------------------------------------------
 
-COMPOSE_FILE="docker-compose.services.yml"
+COMPOSE_FILE="docker-compose.yml"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DATA_DIR="${PROJECT_DIR}/data"
 ENV_FILE="${PROJECT_DIR}/.env"

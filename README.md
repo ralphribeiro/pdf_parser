@@ -23,7 +23,7 @@ Local pipeline for text and structure extraction from mixed PDFs (digital and sc
 ### Docker (Async services with Redis + ChromaDB) — recommended
 
 ```bash
-docker compose -f docker-compose.services.yml up --build -d
+docker compose up --build -d
 
 # Health check
 curl http://localhost:8090/api/jobs/healthcheck
@@ -268,7 +268,7 @@ doc_parser/
 ├── config.py                     # Global configuration
 ├── pyproject.toml                # Dependencies, build config, tool settings
 ├── Dockerfile                    # Docker image (ROCm)
-└── docker-compose.services.yml   # Docker Compose (Redis + ChromaDB + API + Worker)
+└── docker-compose.yml   # Docker Compose (Redis + ChromaDB + API + Worker)
 ```
 
 ## Testing
@@ -286,13 +286,13 @@ pytest -v
 The Docker image is based on the official AMD ROCm PyTorch image and includes all system dependencies.
 
 ```bash
-docker compose -f docker-compose.services.yml up --build
+docker compose up --build
 
 # View logs
-docker compose -f docker-compose.services.yml logs -f
+docker compose logs -f
 
 # Stop
-docker compose -f docker-compose.services.yml down
+docker compose down
 ```
 
 **Host requirements for GPU support:**

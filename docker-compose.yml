@@ -2,7 +2,7 @@
 # Docker Compose — Doc Parser services (Redis + MongoDB + ChromaDB + API + Worker)
 #
 # Usage:
-#   docker compose -f docker-compose.services.yml up --build
+#   docker compose up --build
 #
 # Endpoints:
 #   http://localhost:8090/          — UI upload page

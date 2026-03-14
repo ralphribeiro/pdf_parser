@@ -43,7 +43,7 @@ doc_parser/
 │   └── llm_postprocess.py        # Pós-processamento de OCR via LLM (Ollama)
 ├── config.py                     # Configuração global
 ├── pyproject.toml                # Dependências e configurações
-├── docker-compose.services.yml   # Docker Compose (Redis + MongoDB + ChromaDB + API + Worker)
+├── docker-compose.yml   # Docker Compose (Redis + MongoDB + ChromaDB + API + Worker)
 └── tests/                        # Suite de testes
 ```
 
@@ -125,7 +125,7 @@ cp .env.example .env
 ### Docker (recomendado)
 
 ```bash
-docker compose -f docker-compose.services.yml up --build -d
+docker compose up --build -d
 
 # Health check
 curl http://localhost:8090/api/jobs/healthcheck
@@ -345,7 +345,7 @@ Reply with "TDD MODE ACTIVATED" if you understand and agree to these terms. Let'
 
 ```bash
 # Docker build
-docker compose -f docker-compose.services.yml build
+docker compose build
 
 # Local install (with ROCm GPU support)
 pip install --index-url https://download.pytorch.org/whl/rocm7.0 ".[torch-rocm]"
