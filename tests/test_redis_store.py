@@ -184,6 +184,64 @@ class TestRedisStoreQueue:
 # =========================================================================
 
 
+# =========================================================================
+# list_all() and count()
+# =========================================================================
+
+
+class TestRedisStoreListAll:
+    def test_returns_empty_list_when_no_jobs(self, store):
+        result = store.list_all()
+        assert result == []
+
+    def test_returns_all_jobs(self, store):
+        store.create(filename="a.pdf")
+        store.create(filename="b.pdf")
+        result = store.list_all()
+        assert len(result) == 2
+
+    def test_respects_limit(self, store):
+        for i in range(5):
+            store.create(filename=f"{i}.pdf")
+        result = store.list_all(limit=3)
+        assert len(result) == 3
+
+    def test_respects_offset(self, store):
+        for i in range(5):
+            store.create(filename=f"{i}.pdf")
+        result = store.list_all(offset=2)
+        assert len(result) == 3
+
+    def test_limit_and_offset_combined(self, store):
+        for i in range(10):
+            store.create(filename=f"{i}.pdf")
+        result = store.list_all(limit=3, offset=2)
+        assert len(result) == 3
+
+    def test_offset_beyond_end_returns_empty(self, store):
+        store.create(filename="a.pdf")
+        result = store.list_all(offset=100)
+        assert result == []
+
+    def test_returns_job_objects(self, store):
+        from services.ingest_api.schemas import Job
+
+        store.create(filename="a.pdf")
+        result = store.list_all()
+        assert len(result) == 1
+        assert isinstance(result[0], Job)
+
+
+class TestRedisStoreCount:
+    def test_count_returns_total_jobs(self, store):
+        store.create(filename="a.pdf")
+        store.create(filename="b.pdf")
+        assert store.count() == 2
+
+    def test_count_returns_zero_when_empty(self, store):
+        assert store.count() == 0
+
+
 class TestRedisStoreFromUrl:
     def test_from_url_creates_instance(self):
         from services.ingest_api.redis_store import RedisJobStore

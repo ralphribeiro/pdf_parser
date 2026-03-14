@@ -141,6 +141,49 @@ class TestSearchChunks:
         result = search_chunks(empty_svc, doc_store, query="inexistente")
         assert "Nenhum resultado" in result
 
+    def test_uses_source_file_when_doc_store_missing(self):
+        from services.ingest_api.schemas import SearchResult
+
+        svc = _FakeSearchService(
+            results=[
+                SearchResult(
+                    chunk_id="x:1:b1",
+                    text="Texto qualquer",
+                    similarity=0.85,
+                    document_id="unknown_id",
+                    source_file="relatorio.pdf",
+                    page_number=3,
+                    block_id="b1",
+                    block_type="text",
+                    confidence=0.9,
+                ),
+            ]
+        )
+        result = search_chunks(svc, None, query="texto")
+        assert '"filename": "relatorio.pdf"' in result
+
+    def test_uses_source_file_when_doc_not_found(self):
+        from services.ingest_api.schemas import SearchResult
+
+        svc = _FakeSearchService(
+            results=[
+                SearchResult(
+                    chunk_id="x:1:b1",
+                    text="Conteudo importante",
+                    similarity=0.88,
+                    document_id="id_nao_existe",
+                    source_file="laudo.pdf",
+                    page_number=10,
+                    block_id="b1",
+                    block_type="text",
+                    confidence=0.9,
+                ),
+            ]
+        )
+        empty_store = _FakeDocStore(docs=[])
+        result = search_chunks(svc, empty_store, query="conteudo")
+        assert '"filename": "laudo.pdf"' in result
+
 
 # ---------------------------------------------------------------------------
 # Tests: get_document

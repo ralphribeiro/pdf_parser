@@ -55,6 +55,22 @@ class JobStore:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def list_all(
+        self,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[Job]:
+        """Return jobs with pagination (newest first)."""
+        with self._lock:
+            jobs = list(self._jobs.values())
+        return jobs[offset : offset + limit]
+
+    def count(self) -> int:
+        """Return total number of stored jobs."""
+        with self._lock:
+            return len(self._jobs)
+
     def get_next_queued(self) -> Job | None:
         """Return the oldest queued job, or None."""
         with self._lock:

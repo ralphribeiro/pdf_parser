@@ -80,3 +80,68 @@ class TestSearchEndpoint:
             "document_id": "doc-1",
             "min_similarity": 0.7,
         }
+
+
+class _FakeDocStore:
+    def __init__(self, docs):
+        self._docs = docs
+
+    def get_document(self, document_id):
+        return self._docs.get(document_id)
+
+
+class TestSearchEnrichesSourceFile:
+    """Search results must show the original filename, not the hash."""
+
+    def test_replaces_hash_with_real_filename(self, tmp_path):
+        svc = _FakeSearchService()
+        svc.search = lambda *a, **kw: [
+            SearchResult(
+                chunk_id="c1",
+                text="texto",
+                similarity=0.9,
+                document_id="abc123",
+                source_file="abc123.pdf",
+                page_number=1,
+                block_id="b1",
+                block_type="text",
+                confidence=0.9,
+            )
+        ]
+        doc_store = _FakeDocStore({"abc123": {"filename": "contrato_social.pdf"}})
+        app = create_app(
+            upload_dir=tmp_path,
+            store=JobStore(),
+            semantic_search=svc,
+            document_store=doc_store,
+        )
+        client = TestClient(app)
+        resp = client.post("/search", json={"query": "texto"})
+        assert resp.status_code == 200
+        assert resp.json()["results"][0]["source_file"] == "contrato_social.pdf"
+
+    def test_keeps_source_file_when_no_doc_store(self, tmp_path):
+        svc = _FakeSearchService()
+        app = create_app(
+            upload_dir=tmp_path,
+            store=JobStore(),
+            semantic_search=svc,
+        )
+        client = TestClient(app)
+        resp = client.post("/search", json={"query": "resultado"})
+        assert resp.status_code == 200
+        assert resp.json()["results"][0]["source_file"] == "doc.pdf"
+
+    def test_keeps_source_file_when_doc_not_found(self, tmp_path):
+        svc = _FakeSearchService()
+        doc_store = _FakeDocStore({})
+        app = create_app(
+            upload_dir=tmp_path,
+            store=JobStore(),
+            semantic_search=svc,
+            document_store=doc_store,
+        )
+        client = TestClient(app)
+        resp = client.post("/search", json={"query": "resultado"})
+        assert resp.status_code == 200
+        assert resp.json()["results"][0]["source_file"] == "doc.pdf"

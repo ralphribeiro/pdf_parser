@@ -90,6 +90,40 @@ class SearchResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class DocumentSummary(BaseModel):
+    """Lightweight document representation for list responses."""
+
+    document_id: str = Field(description="MongoDB document identifier")
+    filename: str = Field(description="Original uploaded filename")
+    status: str = Field(description="Current document status")
+    total_pages: int | None = Field(default=None, description="Number of pages")
+    created_at: datetime = Field(description="Document creation timestamp")
+    file_size: int = Field(description="File size in bytes")
+
+
+class JobListResponse(BaseModel):
+    """Paginated list of jobs."""
+
+    items: list[Job] = Field(description="Jobs in the current page")
+    total: int = Field(ge=0, description="Total number of jobs")
+    limit: int = Field(ge=1, description="Page size")
+    offset: int = Field(ge=0, description="Number of items skipped")
+
+
+class DocumentListResponse(BaseModel):
+    """Paginated list of document summaries."""
+
+    items: list[DocumentSummary] = Field(description="Documents in the current page")
+    total: int = Field(ge=0, description="Total number of documents")
+    limit: int = Field(ge=1, description="Page size")
+    offset: int = Field(ge=0, description="Number of items skipped")
+
+
+# ---------------------------------------------------------------------------
+# Agent search
+# ---------------------------------------------------------------------------
+
+
 class AgentSearchRequest(BaseModel):
     """Request payload for agent-based enriched search."""
 

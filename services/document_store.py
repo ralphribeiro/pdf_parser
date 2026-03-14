@@ -103,9 +103,13 @@ class DocumentStore:
         )
 
     def list_documents(
-        self, *, status: str | None = None, limit: int = 20
+        self,
+        *,
+        status: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
     ) -> list[dict]:
-        """Return documents, optionally filtered by status."""
+        """Return documents, optionally filtered by status, with pagination."""
         query: dict[str, Any] = {}
         if status:
             query["status"] = status
@@ -116,12 +120,19 @@ class DocumentStore:
             "created_at": 1,
             "file_size": 1,
         }
-        cursor = self.collection.find(query, projection).limit(limit)
+        cursor = self.collection.find(query, projection).skip(offset).limit(limit)
         results: list[dict] = []
         for doc in cursor:
             doc["_id"] = str(doc["_id"])
             results.append(doc)
         return results
+
+    def count_documents(self, *, status: str | None = None) -> int:
+        """Return total count of documents, optionally filtered by status."""
+        query: dict[str, Any] = {}
+        if status:
+            query["status"] = status
+        return self.collection.count_documents(query)
 
     def search_text(self, document_id: str, keyword: str) -> list[dict]:
         """Search for a keyword inside the parsed_document of a specific document."""

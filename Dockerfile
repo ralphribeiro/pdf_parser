@@ -4,9 +4,9 @@
 # Base: Official AMD PyTorch with ROCm 7.2 (gfx1100 / RX 7900 XT)
 #
 # This image is used by both the `api` and `worker` services defined in
-# docker-compose.services.yml — the CMD is overridden per service.
+# docker-compose.yml — the CMD is overridden per service.
 #
-# Build:  docker compose -f docker-compose.services.yml build
+# Build:  docker compose -f docker-compose.yml build
 # =============================================================================
 
 FROM rocm/pytorch:rocm7.2_ubuntu24.04_py3.12_pytorch_release_2.7.1

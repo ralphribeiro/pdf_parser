@@ -87,7 +87,9 @@ def create_combined_app(
         document_store=document_store,
         agent_runner=agent_runner,
     )
-    ui = create_ui_app(upload_dir=upload_dir, store=store)
+    ui = create_ui_app(
+        upload_dir=upload_dir, store=store, document_store=document_store
+    )
 
     application.mount("/api", api)
     application.mount("/", ui)

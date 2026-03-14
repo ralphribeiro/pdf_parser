@@ -7,14 +7,19 @@
 ```
 ┌─────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │   Cliente   │────▶│    API       │────▶│    Fila      │────▶│   Worker     │
-│             │◀────│  Principal   │     │  (Redis/Celery)│     │  de Process  │
+│             │◀────│  (FastAPI)   │     │   (Redis)    │     │  OCR + Index │
 └─────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-                                                          │
-                                                          ▼
+                          │                                         │
+                          ▼                                         ▼
 ┌─────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Cliente   │◀────│    API       │     │  ChromaDB    │◀────│  Embedding   │
-│  (Consulta) │     │  de Consulta │     │  (Vetores)   │     │  (externo)   │
+│   Agente    │────▶│   MongoDB    │     │  ChromaDB    │◀────│  Embedding   │
+│  AI (ReAct) │     │  (Documentos)│     │  (Vetores)   │     │  (llama.cpp) │
 └─────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+                                                                    │
+                                                              ┌──────────────┐
+                                                              │  LLM Chat    │
+                                                              │  (llama.cpp) │
+                                                              └──────────────┘
 ```
 
 ---
@@ -57,15 +62,15 @@ class ProcessingJob:
 ### 3.1 Fluxo Completo
 
 ```
-1. Upload PDF → Recebe job_id + receipt
-2. Arquivo salvo em storage temporário
-3. Job adicionado à fila (Celery/Redis)
-4. Worker extrai texto (digital + OCR)
-5. Texto segmentado em chunks ideais
-6. Chunks enviados ao serviço de embedding
-7. Embeddings salvos no ChromaDB
-8. Status atualizado para COMPLETED
-9. Notificação enviada ao cliente
+1. Upload PDF → Salvo em /data, registrado no MongoDB → Recebe job_id + document_id
+2. Job adicionado à fila (Redis)
+3. Worker extrai texto (digital + OCR via docTR/Tesseract)
+4. Documento parseado salvo no MongoDB (parsed_document)
+5. Texto segmentado em chunks por bloco
+6. Chunks enviados ao serviço de embedding (llama.cpp)
+7. Embeddings + metadados salvos no ChromaDB
+8. Status atualizado para COMPLETED no Redis e MongoDB
+9. Cliente pode buscar via /api/search (semântica) ou /api/agent/search (agente AI)
 ```
 
 ### 3.2 Configuração de Batching
@@ -253,10 +258,12 @@ retry_config = {
 
 | Endpoint | Método | Descrição |
 |----------|--------|-----------|
-| `/search` | POST | Busca semântica |
-| `/jobs/{job_id}` | GET | Status do job |
-| `/jobs/{job_id}/chunks` | GET | Lista chunks processados |
-| `/health` | GET | Health check |
+| `/api/jobs` | POST | Upload de PDF e criação de job |
+| `/api/jobs/{job_id}` | GET | Status do job |
+| `/api/jobs/healthcheck` | GET | Health check |
+| `/api/search` | POST | Busca semântica sobre chunks |
+| `/api/documents/{id}` | GET | Documento parseado (MongoDB) |
+| `/api/agent/search` | POST | Busca enriquecida via agente AI |
 
 ### 7.2 Endpoint de Busca
 
@@ -325,17 +332,15 @@ retry_config = {
 
 ```toml
 [dependencies]
-# Async Task Queue
-celery = "^5.3.0"
+# Job Queue
 redis = "^5.0.0"
-flower = "^2.0.0"
 
-# ChromaDB
+# Databases
 chromadb = "^0.4.0"
+pymongo = "^4.0.0"
 
-# HTTP Clients (chamadas ao serviço de embedding via API OpenAI-compatible)
+# HTTP Clients (embedding + LLM via API OpenAI-compatible)
 httpx = "^0.26.0"
-websockets = "^12.0"
 
 # Utilities
 pydantic-settings = "^2.0.0"
@@ -351,6 +356,11 @@ services:
     ports: ["6379:6379"]
     volumes: ["redis_data:/data"]
 
+  mongodb:
+    image: mongo:7
+    ports: ["27017:27017"]
+    volumes: ["mongo_data:/data/db"]
+
   chromadb:
     image: chromadb/chroma:latest
     ports: ["8000:8000"]
@@ -359,32 +369,22 @@ services:
       - ANONYMIZED_TELEMETRY=FALSE
       - IS_PERSISTENT=TRUE
 
-  worker:
-    build: ./app
-    command: celery -A app.celery worker -Q processing --loglevel=info
-    depends_on:
-      - redis
-      - chromadb
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - CHROMA_HOST=http://chromadb:8000
-      - EMBEDDING_API_URL=${EMBEDDING_API_URL}
-
   api:
-    build: ./app
-    ports: ["8000:8000"]
-    depends_on:
-      - redis
-      - chromadb
+    build: .
+    ports: ["8090:8080"]
+    depends_on: [redis, mongodb, chromadb]
     environment:
-      - EMBEDDING_API_URL=${EMBEDDING_API_URL}
+      - REDIS_URL, MONGO_URL, CHROMADB_HOST
+      - EMBEDDING_API_URL, EMBEDDING_MODEL, EMBEDDING_API_KEY
+      - LLM_API_URL, LLM_MODEL, LLM_API_KEY
 
-  flower:
-    build: ./app
-    command: celery -A app.celery flower --port=5555
-    ports: ["5555:5555"]
-    depends_on:
-      - redis
+  worker:
+    build: .
+    command: python -m services.worker.run
+    depends_on: [redis, mongodb, chromadb]
+    environment:
+      - REDIS_URL, MONGO_URL, CHROMADB_HOST
+      - EMBEDDING_API_URL, EMBEDDING_MODEL, EMBEDDING_API_KEY
 ```
 
 ---
@@ -511,6 +511,6 @@ services:
 ---
 
 *Documento criado: 2024-01-15*
-*Última atualização: 2026-03-11*
-*Versão: 1.1*
-*Status: Planejamento*
+*Última atualização: 2026-03-13*
+*Versão: 2.0*
+*Status: Implementado*

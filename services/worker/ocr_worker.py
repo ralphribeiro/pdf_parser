@@ -93,10 +93,18 @@ class OcrWorker:
                     job_id,
                 )
 
+        doc_for_index = artifacts.document
+        if hasattr(doc_for_index, "model_copy"):
+            doc_for_index = doc_for_index.model_copy(
+                update={"source_file": job.filename}
+            )
+        elif hasattr(doc_for_index, "source_file"):
+            doc_for_index.source_file = job.filename
+
         ref_id = document_id or job_id
         if self.semantic_indexer is not None:
             try:
-                n = self.semantic_indexer.index_document(ref_id, artifacts.document)
+                n = self.semantic_indexer.index_document(ref_id, doc_for_index)
                 logger.info("Job %s: indexed %d chunks (ref=%s)", job_id, n, ref_id)
             except Exception:
                 logger.exception("Job %s: semantic indexing failed (non-fatal)", job_id)

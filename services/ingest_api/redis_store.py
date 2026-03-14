@@ -78,6 +78,44 @@ class RedisJobStore:
             job_id = job_id.decode()
         return self.get(job_id)
 
+    def list_all(
+        self,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[Job]:
+        """Return jobs with pagination."""
+        keys: list[str] = []
+        cursor: int = 0
+        while True:
+            cursor, batch = self._r.scan(
+                cursor=cursor, match=f"{_KEY_PREFIX}*", count=200
+            )
+            keys.extend(k.decode() if isinstance(k, bytes) else k for k in batch)
+            if cursor == 0:
+                break
+        keys.sort()
+        page_keys = keys[offset : offset + limit]
+        if not page_keys:
+            return []
+        raw_values = self._r.mget(page_keys)
+        return [
+            Job.model_validate_json(cast(str, v)) for v in raw_values if v is not None
+        ]
+
+    def count(self) -> int:
+        """Return total number of stored jobs."""
+        total = 0
+        cursor: int = 0
+        while True:
+            cursor, batch = self._r.scan(
+                cursor=cursor, match=f"{_KEY_PREFIX}*", count=200
+            )
+            total += len(batch)
+            if cursor == 0:
+                break
+        return total
+
     def update_status(
         self,
         job_id: str,

@@ -22,9 +22,13 @@ from services.ingest_api.schemas import (
     AgentSearchRequest,
     AgentSearchResponse,
     AgentSource,
+    DocumentListResponse,
+    DocumentSummary,
     Job,
+    JobListResponse,
     SearchRequest,
     SearchResponse,
+    SearchResult,
 )
 from services.ingest_api.store import JobStore
 
@@ -73,10 +77,49 @@ def _compute_hash(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+def _enrich_source_files(
+    results: list[SearchResult], doc_store: Any
+) -> list[SearchResult]:
+    """Replace hash-based source_file with the original filename."""
+    cache: dict[str, str] = {}
+    enriched: list[SearchResult] = []
+    for r in results:
+        doc_id = r.document_id
+        if doc_id and doc_id not in cache:
+            doc = doc_store.get_document(doc_id)
+            cache[doc_id] = (doc.get("filename") or "") if doc else ""
+        fname = cache.get(doc_id, "")
+        if fname:
+            r = r.model_copy(update={"source_file": fname})
+        enriched.append(r)
+    return enriched
+
+
 def _register_routes(app: FastAPI) -> None:
+    _register_job_routes(app)
+    _register_document_routes(app)
+    _register_search_routes(app)
+
+
+def _register_job_routes(app: FastAPI) -> None:
     @app.get("/jobs/healthcheck", summary="Healthcheck")
     async def jobs_healthcheck() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get(
+        "/jobs",
+        response_model=JobListResponse,
+        summary="List all jobs with pagination",
+    )
+    async def list_jobs(
+        request: Request,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> JobListResponse:
+        store: JobStore = request.app.state.store
+        items = store.list_all(limit=limit, offset=offset)
+        total = store.count()
+        return JobListResponse(items=items, total=total, limit=limit, offset=offset)
 
     @app.post(
         "/jobs",
@@ -147,6 +190,65 @@ def _register_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=404, detail="Job not found")
         return job
 
+
+def _register_document_routes(app: FastAPI) -> None:
+    @app.get(
+        "/documents/{document_id}",
+        summary="Retrieve parsed document from MongoDB",
+        responses={
+            404: {"description": "Document not found"},
+            503: {"description": "Document store not configured"},
+        },
+    )
+    async def get_document(document_id: str, request: Request) -> dict:
+        doc_store = request.app.state.document_store
+        if doc_store is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Document store is not configured",
+            )
+        doc = doc_store.get_document(document_id)
+        if doc is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        doc["_id"] = str(doc["_id"])
+        return doc
+
+    @app.get(
+        "/documents",
+        response_model=DocumentListResponse,
+        summary="List all documents with pagination",
+        responses={503: {"description": "Document store not configured"}},
+    )
+    async def list_documents(
+        request: Request,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> DocumentListResponse:
+        doc_store = request.app.state.document_store
+        if doc_store is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Document store is not configured",
+            )
+        total = doc_store.count_documents()
+        raw = doc_store.list_documents(limit=limit, offset=offset)
+        items = [
+            DocumentSummary(
+                document_id=d["_id"],
+                filename=d["filename"],
+                status=d["status"],
+                total_pages=d.get("total_pages"),
+                created_at=d["created_at"],
+                file_size=d.get("file_size", 0),
+            )
+            for d in raw
+        ]
+        return DocumentListResponse(
+            items=items, total=total, limit=limit, offset=offset
+        )
+
+
+def _register_search_routes(app: FastAPI) -> None:
     @app.post(
         "/search",
         response_model=SearchResponse,
@@ -168,32 +270,16 @@ def _register_routes(app: FastAPI) -> None:
             min_similarity=payload.min_similarity,
         )
         elapsed_ms = int((time.monotonic() - started) * 1000)
+
+        doc_store = request.app.state.document_store
+        if doc_store is not None:
+            results = _enrich_source_files(results, doc_store)
+
         return SearchResponse(
             results=results,
             total_matches=len(results),
             processing_time_ms=elapsed_ms,
         )
-
-    @app.get(
-        "/documents/{document_id}",
-        summary="Retrieve parsed document from MongoDB",
-        responses={
-            404: {"description": "Document not found"},
-            503: {"description": "Document store not configured"},
-        },
-    )
-    async def get_document(document_id: str, request: Request) -> dict:
-        doc_store = request.app.state.document_store
-        if doc_store is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Document store is not configured",
-            )
-        doc = doc_store.get_document(document_id)
-        if doc is None:
-            raise HTTPException(status_code=404, detail="Document not found")
-        doc["_id"] = str(doc["_id"])
-        return doc
 
     @app.post(
         "/agent/search",
