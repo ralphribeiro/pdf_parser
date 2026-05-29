@@ -97,6 +97,13 @@ class DocumentSummary(BaseModel):
     file_size: int = Field(description="File size in bytes")
 
 
+class DocumentStatusResponse(BaseModel):
+    """Minimal document status payload for polling."""
+
+    document_id: str = Field(description="MongoDB document identifier")
+    status: str = Field(description="Current document status")
+
+
 class JobListResponse(BaseModel):
     """Paginated list of jobs."""
 

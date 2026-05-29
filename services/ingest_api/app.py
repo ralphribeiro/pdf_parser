@@ -8,6 +8,7 @@ Mounted at ``/api`` by ``services.app``. Endpoints:
     POST /jobs                   - Upload PDF and create job (202 / 400 / 409)
     GET  /jobs/{job_id}          - Job status (404 if missing)
     GET  /documents              - List documents (503 without MongoDB)
+    GET  /documents/{document_id}/status - Lightweight document status
     GET  /documents/{document_id} - Parsed document from MongoDB (404 / 503)
     POST /search                 - Semantic search over indexed chunks
     POST /agent/search           - Agent-based enriched search (503 without LLM)
@@ -27,6 +28,7 @@ from services.ingest_api.schemas import (
     AgentSearchResponse,
     AgentSource,
     DocumentListResponse,
+    DocumentStatusResponse,
     DocumentSummary,
     Job,
     JobListResponse,
@@ -227,6 +229,29 @@ def _register_job_routes(app: FastAPI) -> None:
 
 
 def _register_document_routes(app: FastAPI) -> None:
+    @app.get(
+        "/documents/{document_id}/status",
+        response_model=DocumentStatusResponse,
+        summary="Retrieve lightweight document status",
+        responses={
+            404: {"description": "Document not found"},
+            503: {"description": "Document store not configured"},
+        },
+    )
+    async def get_document_status(
+        document_id: str, request: Request
+    ) -> DocumentStatusResponse:
+        doc_store = request.app.state.document_store
+        if doc_store is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Document store is not configured",
+            )
+        doc = doc_store.get_document(document_id)
+        if doc is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return DocumentStatusResponse(document_id=str(doc["_id"]), status=doc["status"])
+
     @app.get(
         "/documents/{document_id}",
         summary="Retrieve parsed document from MongoDB",
