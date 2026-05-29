@@ -71,6 +71,14 @@ class _InMemoryVectorStore:
         return results[:n_results]
 
 
+class _FakeDocumentStore:
+    def __init__(self, docs):
+        self._docs = docs
+
+    def get_document(self, document_id):
+        return self._docs.get(document_id)
+
+
 def _artifact_with_document(pdf_path, output_dir, **kwargs):
     document = Document(
         doc_id="doc-1",
@@ -131,12 +139,26 @@ class TestSemanticFlow:
         (upload_dir / f"{job.job_id}.pdf").write_bytes(b"%PDF-1.4 fake")
         worker.process_job(job.job_id)
 
-        app = create_app(upload_dir=tmp_path, store=job_store, semantic_search=service)
+        doc_store = _FakeDocumentStore(
+            {
+                job.job_id: {
+                    "_id": job.job_id,
+                    "filename": "invoice.pdf",
+                    "status": "processed",
+                }
+            }
+        )
+        app = create_app(
+            upload_dir=tmp_path,
+            store=job_store,
+            semantic_search=service,
+            document_store=doc_store,
+        )
         response = TestClient(app).post(
             "/search",
             json={
                 "query": "contrato de locacao",
-                "filters": {"document_id": job.job_id},
+                "document_id": job.job_id,
             },
         )
         assert response.status_code == 200

@@ -99,6 +99,37 @@ def _enrich_source_files(
     return enriched
 
 
+def _validate_document_ready(
+    request: Request, document_id: str | None, *, operation: str
+) -> None:
+    """Validate that a scoped document exists and is processed."""
+    if document_id is None:
+        return
+
+    doc_store = request.app.state.document_store
+    if doc_store is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Document store is not configured",
+        )
+
+    doc = doc_store.get_document(document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    status = doc.get("status")
+    if status != "processed":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Document is not ready for search",
+                "document_id": document_id,
+                "status": status,
+                "operation": operation,
+            },
+        )
+
+
 def _register_routes(app: FastAPI) -> None:
     _register_job_routes(app)
     _register_document_routes(app)
@@ -266,11 +297,13 @@ def _register_search_routes(app: FastAPI) -> None:
                 detail="Semantic search service is not configured",
             )
 
+        _validate_document_ready(request, payload.document_id, operation="search")
+
         started = time.monotonic()
         results = service.search(
             payload.query,
             n_results=payload.n_results,
-            document_id=(payload.filters.document_id if payload.filters else None),
+            document_id=payload.document_id,
             min_similarity=payload.min_similarity,
         )
         elapsed_ms = int((time.monotonic() - started) * 1000)
@@ -304,8 +337,10 @@ def _register_search_routes(app: FastAPI) -> None:
         if payload.max_iterations:
             runner = _with_max_iterations(runner, payload.max_iterations)
 
+        _validate_document_ready(request, payload.document_id, operation="agent_search")
+
         started = time.monotonic()
-        result = runner.run(payload.query)
+        result = runner.run(payload.query, document_id=payload.document_id)
         elapsed_ms = int((time.monotonic() - started) * 1000)
 
         return AgentSearchResponse(

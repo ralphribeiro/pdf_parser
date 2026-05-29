@@ -5,7 +5,7 @@ Job schemas for the async ingest API.
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class JobStatus(StrEnum):
@@ -39,22 +39,18 @@ class Job(BaseModel):
     )
 
 
-class SearchFilters(BaseModel):
-    """Optional filters for semantic search."""
-
-    document_id: str | None = Field(
-        default=None, description="Restrict results to one document"
-    )
-
-
 class SearchRequest(BaseModel):
     """Semantic search request payload."""
+
+    model_config = ConfigDict(extra="forbid")
 
     query: str = Field(min_length=1, description="Natural-language query text")
     n_results: int = Field(
         default=10, ge=1, le=100, description="Maximum number of results to return"
     )
-    filters: SearchFilters | None = Field(default=None, description="Optional filters")
+    document_id: str | None = Field(
+        default=None, description="Restrict results to one processed document"
+    )
     min_similarity: float | None = Field(
         default=None,
         ge=0.0,

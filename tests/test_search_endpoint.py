@@ -5,6 +5,7 @@ Tests for POST /search endpoint on ingest API.
 import sys
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -60,16 +61,24 @@ class TestSearchEndpoint:
         assert payload["results"][0]["chunk_id"] == "doc-1:1:p1_b1"
         assert payload["processing_time_ms"] >= 0
 
-    def test_passes_filters_to_service(self, tmp_path):
+    def test_passes_document_id_to_service(self, tmp_path):
         service = _FakeSearchService()
-        app = create_app(upload_dir=tmp_path, store=JobStore(), semantic_search=service)
+        doc_store = _FakeDocStore(
+            {"doc-1": {"_id": "doc-1", "filename": "doc.pdf", "status": "processed"}}
+        )
+        app = create_app(
+            upload_dir=tmp_path,
+            store=JobStore(),
+            semantic_search=service,
+            document_store=doc_store,
+        )
         client = TestClient(app)
         response = client.post(
             "/search",
             json={
                 "query": "resultado",
                 "n_results": 3,
-                "filters": {"document_id": "doc-1"},
+                "document_id": "doc-1",
                 "min_similarity": 0.7,
             },
         )
@@ -80,6 +89,75 @@ class TestSearchEndpoint:
             "document_id": "doc-1",
             "min_similarity": 0.7,
         }
+
+    def test_rejects_legacy_filters_payload(self, tmp_path):
+        service = _FakeSearchService()
+        app = create_app(upload_dir=tmp_path, store=JobStore(), semantic_search=service)
+        client = TestClient(app)
+        response = client.post(
+            "/search",
+            json={"query": "resultado", "filters": {"document_id": "doc-1"}},
+        )
+        assert response.status_code == 422
+        assert not service.calls
+
+    def test_validates_document_exists(self, tmp_path):
+        service = _FakeSearchService()
+        doc_store = _FakeDocStore({})
+        app = create_app(
+            upload_dir=tmp_path,
+            store=JobStore(),
+            semantic_search=service,
+            document_store=doc_store,
+        )
+        client = TestClient(app)
+        response = client.post(
+            "/search",
+            json={"query": "resultado", "document_id": "missing"},
+        )
+        assert response.status_code == 404
+        assert not service.calls
+
+    @pytest.mark.parametrize("status", ["pending", "processing", "failed"])
+    def test_requires_processed_document(self, tmp_path, status):
+        service = _FakeSearchService()
+        doc_store = _FakeDocStore(
+            {"doc-1": {"_id": "doc-1", "filename": "doc.pdf", "status": status}}
+        )
+        app = create_app(
+            upload_dir=tmp_path,
+            store=JobStore(),
+            semantic_search=service,
+            document_store=doc_store,
+        )
+        client = TestClient(app)
+        response = client.post(
+            "/search",
+            json={"query": "resultado", "document_id": "doc-1"},
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["document_id"] == "doc-1"
+        assert response.json()["detail"]["status"] == status
+        assert not service.calls
+
+    def test_requires_document_store_when_document_id_is_provided(self, tmp_path):
+        service = _FakeSearchService()
+        app = create_app(upload_dir=tmp_path, store=JobStore(), semantic_search=service)
+        client = TestClient(app)
+        response = client.post(
+            "/search",
+            json={"query": "resultado", "document_id": "doc-1"},
+        )
+        assert response.status_code == 503
+        assert not service.calls
+
+    def test_does_not_require_document_store_without_document_id(self, tmp_path):
+        service = _FakeSearchService()
+        app = create_app(upload_dir=tmp_path, store=JobStore(), semantic_search=service)
+        client = TestClient(app)
+        response = client.post("/search", json={"query": "resultado"})
+        assert response.status_code == 200
+        assert service.calls[0]["document_id"] is None
 
 
 class _FakeDocStore:

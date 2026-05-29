@@ -18,7 +18,7 @@ class TestSearchRequest:
         req = SearchRequest(query="fatura vencida")
         assert req.query == "fatura vencida"
         assert req.n_results == 10
-        assert req.filters is None
+        assert req.document_id is None
         assert req.min_similarity is None
 
     def test_rejects_empty_query(self):
@@ -33,15 +33,35 @@ class TestSearchRequest:
         with pytest.raises(ValidationError):
             SearchRequest(query="abc", n_results=0)
 
-    def test_accepts_document_filter(self):
-        from services.ingest_api.schemas import SearchFilters, SearchRequest
+    def test_accepts_top_level_document_id(self):
+        from services.ingest_api.schemas import SearchRequest
 
         req = SearchRequest(
             query="contrato",
-            filters=SearchFilters(document_id="doc-123"),
+            document_id="doc-123",
         )
-        assert req.filters is not None
-        assert req.filters.document_id == "doc-123"
+        assert req.document_id == "doc-123"
+
+    def test_rejects_legacy_filters_payload(self):
+        from services.ingest_api.schemas import SearchRequest
+
+        with pytest.raises(ValidationError):
+            SearchRequest(query="contrato", filters={"document_id": "doc-123"})
+
+    def test_document_id_is_optional(self):
+        from services.ingest_api.schemas import SearchRequest
+
+        req = SearchRequest(query="contrato")
+        assert req.document_id is None
+
+    def test_document_id_can_be_serialized(self):
+        from services.ingest_api.schemas import SearchRequest
+
+        req = SearchRequest(query="contrato", document_id="doc-123")
+        payload = req.model_dump()
+
+        assert payload["document_id"] == "doc-123"
+        assert "filters" not in payload
 
 
 class TestSearchResponse:
