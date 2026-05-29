@@ -154,15 +154,15 @@ curl -sS "http://localhost:8090/api/documents?limit=10" | jq
 # Documento parseado
 curl -sS "http://localhost:8090/api/documents/{document_id}" | jq
 
-# Busca semântica (filtro opcional por document_id)
+# Busca semântica (escopo opcional por document_id processado)
 curl -sS -X POST http://localhost:8090/api/search \
   -H "content-type: application/json" \
-  -d '{"query":"contrato de locacao","n_results":5,"filters":{"document_id":"..."}}' | jq
+  -d '{"query":"contrato de locacao","n_results":5,"document_id":"..."}' | jq
 
-# Busca via agente AI (requer LLM_API_URL)
+# Busca via agente AI com escopo garantido por document_id (requer LLM_API_URL)
 curl -sS -X POST http://localhost:8090/api/agent/search \
   -H "content-type: application/json" \
-  -d '{"query":"quais sao as clausulas principais?"}' | jq
+  -d '{"query":"quais sao as clausulas principais?","document_id":"..."}' | jq
 ```
 
 > **Portas:** Docker expõe `8090:8080` (`localhost:8090`). `uvicorn` local usa porta **8080**.
@@ -204,10 +204,16 @@ Documentação interativa: `/api/docs` e `/api/redoc`.
 | GET | `/api/jobs/{job_id}` | Status do job |
 | GET | `/api/documents` | Listar documentos (**503** sem MongoDB) |
 | GET | `/api/documents/{document_id}` | Documento parseado (MongoDB) |
-| POST | `/api/search` | Busca semântica sobre chunks indexados |
-| POST | `/api/agent/search` | Busca enriquecida via agente AI (**503** sem `LLM_API_URL`) |
+| POST | `/api/search` | Busca semântica sobre chunks indexados; aceita `document_id` processado |
+| POST | `/api/agent/search` | Busca enriquecida via agente AI; aceita `document_id` processado (**503** sem `LLM_API_URL`) |
 
 Em `POST /api/jobs`, resposta **409** inclui `document_id` do documento já existente (hash SHA-256 duplicado).
+
+Em `POST /api/search` e `POST /api/agent/search`, quando `document_id` é
+informado, ele deve existir no MongoDB e estar com `status="processed"`. A API
+retorna **404** para documento inexistente e **409** para documentos `pending`,
+`processing` ou `failed`. No agente, esse escopo é aplicado no backend e todas
+as ferramentas ficam restritas ao documento escolhido.
 
 #### Rotas da UI web
 

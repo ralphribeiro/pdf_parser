@@ -40,13 +40,18 @@ JOB_ID=$(
 curl -sS "http://localhost:8090/api/jobs/$JOB_ID" | jq
 DOC_ID=$(curl -sS "http://localhost:8090/api/jobs/$JOB_ID" | jq -r '.document_id')
 
-# 3) Semantic search (optionally filter by document_id)
+# 3) Semantic search (optionally scoped by processed document_id)
 curl -sS -X POST http://localhost:8090/api/search \
   -H "content-type: application/json" \
-  -d "{\"query\":\"contrato de locacao\",\"n_results\":5,\"filters\":{\"document_id\":\"$DOC_ID\"}}" | jq
+  -d "{\"query\":\"contrato de locacao\",\"n_results\":5,\"document_id\":\"$DOC_ID\"}" | jq
 
 # 4) Fetch parsed document (after job status is uploaded)
 curl -sS "http://localhost:8090/api/documents/$DOC_ID" | jq
+
+# 5) Agent search scoped to the same processed document
+curl -sS -X POST http://localhost:8090/api/agent/search \
+  -H "content-type: application/json" \
+  -d "{\"query\":\"resuma as obrigacoes principais\",\"document_id\":\"$DOC_ID\"}" | jq
 ```
 
 > **Ports:** Docker maps container port 8080 to host **8090** (`localhost:8090`). Local `uvicorn` uses **8080** directly.
@@ -108,8 +113,8 @@ Interactive OpenAPI docs: `/api/docs` and `/api/redoc` (same host/port as the ap
 | GET | `/api/jobs/{job_id}` | Get job status |
 | GET | `/api/documents` | List documents (**503** without MongoDB) |
 | GET | `/api/documents/{document_id}` | Parsed document from MongoDB |
-| POST | `/api/search` | Semantic search over indexed chunks |
-| POST | `/api/agent/search` | Agent-based enriched search (**503** without `LLM_API_URL`) |
+| POST | `/api/search` | Semantic search over indexed chunks; optional processed `document_id` scope |
+| POST | `/api/agent/search` | Agent-based enriched search; optional processed `document_id` scope (**503** without `LLM_API_URL`) |
 
 #### Web UI routes
 
@@ -121,25 +126,33 @@ Interactive OpenAPI docs: `/api/docs` and `/api/redoc` (same host/port as the ap
 
 #### `POST /api/search` payload
 
+When `document_id` is provided, it must identify an existing document with
+`status="processed"`. The API returns **404** for unknown documents and **409**
+for documents that are still pending, processing, or failed.
+
 ```bash
 curl -X POST http://localhost:8080/api/search \
   -H "content-type: application/json" \
   -d '{
     "query": "texto da consulta",
     "n_results": 10,
-    "filters": {"document_id": "optional-document-id"},
+    "document_id": "optional-processed-document-id",
     "min_similarity": 0.7
   }'
 ```
 
 #### `POST /api/agent/search` payload
 
+The same `document_id` rule applies here. When set, the backend enforces that
+all agent tools stay scoped to that document, even if the model omits or changes
+the document id in a tool call.
+
 ```bash
 curl -X POST http://localhost:8080/api/agent/search \
   -H "content-type: application/json" \
   -d '{
     "query": "What are the main contract terms?",
-    "document_id": "optional-document-id",
+    "document_id": "optional-processed-document-id",
     "max_iterations": 5
   }'
 ```
