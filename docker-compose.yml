@@ -4,10 +4,16 @@
 # Usage:
 #   docker compose up --build
 #
-# Endpoints:
-#   http://localhost:8090/          — UI upload page
-#   http://localhost:8090/jobs/{id} — UI job status (HTML)
-#   http://localhost:8090/api/jobs  — API (JSON)
+# Endpoints (host port 8090 maps to container 8080):
+#   UI:     http://localhost:8090/  /upload  /jobs  /documents  /search  /agent
+#   API:    http://localhost:8090/api/jobs/healthcheck
+#           http://localhost:8090/api/jobs  (GET list, POST upload)
+#           http://localhost:8090/api/jobs/{job_id}
+#           http://localhost:8090/api/documents  (GET list)
+#           http://localhost:8090/api/documents/{document_id}
+#           http://localhost:8090/api/search  (POST)
+#           http://localhost:8090/api/agent/search  (POST)
+#   OpenAPI: http://localhost:8090/api/docs
 #
 # Host requirements:
 #   - amdgpu driver + ROCm installed

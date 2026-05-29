@@ -1,12 +1,16 @@
 """
 FastAPI application for asynchronous document ingest.
 
-Endpoints:
-    POST /jobs              - Upload PDF and create a processing job (202 / 409)
-    GET  /jobs/{job_id}     - Query job status (200 / 404)
-    POST /search            - Semantic search over indexed chunks
-    GET  /documents/{id}    - Retrieve parsed document from MongoDB
-    POST /agent/search      - Agent-based enriched semantic search
+Mounted at ``/api`` by ``services.app``. Endpoints:
+
+    GET  /jobs/healthcheck       - Health check
+    GET  /jobs                   - List jobs (limit, offset)
+    POST /jobs                   - Upload PDF and create job (202 / 400 / 409)
+    GET  /jobs/{job_id}          - Job status (404 if missing)
+    GET  /documents              - List documents (503 without MongoDB)
+    GET  /documents/{document_id} - Parsed document from MongoDB (404 / 503)
+    POST /search                 - Semantic search over indexed chunks
+    POST /agent/search           - Agent-based enriched search (503 without LLM)
 """
 
 from __future__ import annotations
