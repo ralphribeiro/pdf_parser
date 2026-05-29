@@ -118,6 +118,26 @@ class TestDocumentListResponseSchema:
         assert doc.file_size == 5000
 
 
+class TestDocumentStatusResponseSchema:
+    """DocumentStatusResponse should expose status polling fields only."""
+
+    def test_has_required_fields(self):
+        from services.ingest_api.schemas import DocumentStatusResponse
+
+        resp = DocumentStatusResponse(document_id="d1", status="processed")
+        assert resp.document_id == "d1"
+        assert resp.status == "processed"
+
+    def test_serializes_to_json(self):
+        from services.ingest_api.schemas import DocumentStatusResponse
+
+        data = DocumentStatusResponse(
+            document_id="d1",
+            status="processing",
+        ).model_dump(mode="json")
+        assert data == {"document_id": "d1", "status": "processing"}
+
+
 # =========================================================================
 # Cycle L3: JobStore.list_all()
 # =========================================================================
@@ -434,3 +454,31 @@ class TestListDocumentsEndpoint:
         assert item["filename"] == "report.pdf"
         assert "status" in item
         assert "file_size" in item
+
+
+class TestDocumentStatusEndpoint:
+    """GET /documents/{document_id}/status should support lightweight polling."""
+
+    def test_returns_503_without_document_store(self, api_client):
+        client, _ = api_client
+        resp = client.get("/documents/some-id/status")
+        assert resp.status_code == 503
+
+    def test_returns_404_for_missing_document(self, api_client_with_docs):
+        client, _, _ = api_client_with_docs
+        resp = client.get("/documents/missing/status")
+        assert resp.status_code == 404
+
+    def test_returns_200_with_document_status(self, api_client_with_docs):
+        client, _, doc_store = api_client_with_docs
+        doc_id = doc_store.create_document(
+            file_hash="status-hash",
+            filename="status.pdf",
+            file_size=123,
+            pdf_path="data/status.pdf",
+        )
+        doc_store.update_status(doc_id, "processing")
+        resp = client.get(f"/documents/{doc_id}/status")
+        data = resp.json()
+        assert resp.status_code == 200
+        assert data == {"document_id": doc_id, "status": "processing"}
