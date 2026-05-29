@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 from services.agent.tools import (
@@ -23,8 +23,17 @@ class _FakeSearchService:
     """Stub for SemanticSearchService."""
 
     results: list
+    calls: list[dict] = field(default_factory=list)
 
     def search(self, query, *, n_results=5, document_id=None, min_similarity=None):
+        self.calls.append(
+            {
+                "query": query,
+                "n_results": n_results,
+                "document_id": document_id,
+                "min_similarity": min_similarity,
+            }
+        )
         return self.results
 
 
@@ -33,17 +42,23 @@ class _FakeDocStore:
 
     def __init__(self, docs: list[dict] | None = None):
         self._docs = {str(d["_id"]): d for d in (docs or [])}
+        self.get_calls: list[str] = []
+        self.list_calls: list[dict] = []
+        self.search_text_calls: list[dict] = []
 
     def get_document(self, document_id: str):
+        self.get_calls.append(document_id)
         return self._docs.get(document_id)
 
     def list_documents(self, *, status: str | None = None, limit: int = 20):
+        self.list_calls.append({"status": status, "limit": limit})
         docs = list(self._docs.values())
         if status:
             docs = [d for d in docs if d.get("status") == status]
         return docs[:limit]
 
     def search_text(self, document_id: str, keyword: str):
+        self.search_text_calls.append({"document_id": document_id, "keyword": keyword})
         doc = self._docs.get(document_id)
         if not doc:
             return []
@@ -287,3 +302,87 @@ class TestToolRegistry:
         )
         result = registry.execute("get_document", {"document_id": "doc1"}, max_chars=30)
         assert len(result) <= 30 + len("... [truncado]")
+
+    def test_scoped_registry_returns_self_for_none(self, search_service, doc_store):
+        registry = ToolRegistry(search_service=search_service, document_store=doc_store)
+        assert registry.scoped_to_document(None) is registry
+
+    def test_scoped_registry_injects_document_id_in_search_chunks(
+        self, search_service, doc_store
+    ):
+        registry = ToolRegistry(
+            search_service=search_service, document_store=doc_store
+        ).scoped_to_document("doc1")
+
+        registry.execute("search_chunks", {"query": "multa"})
+
+        assert search_service.calls[-1]["document_id"] == "doc1"
+
+    def test_scoped_registry_overrides_wrong_document_id_in_search_chunks(
+        self, search_service, doc_store
+    ):
+        registry = ToolRegistry(
+            search_service=search_service, document_store=doc_store
+        ).scoped_to_document("doc1")
+
+        registry.execute("search_chunks", {"query": "multa", "document_id": "doc2"})
+
+        assert search_service.calls[-1]["document_id"] == "doc1"
+
+    def test_scoped_registry_injects_document_id_in_search_document_text(
+        self, search_service, doc_store
+    ):
+        registry = ToolRegistry(
+            search_service=search_service, document_store=doc_store
+        ).scoped_to_document("doc1")
+
+        registry.execute("search_document_text", {"keyword": "multa"})
+
+        assert doc_store.search_text_calls[-1] == {
+            "document_id": "doc1",
+            "keyword": "multa",
+        }
+
+    def test_scoped_registry_overrides_get_document(self, search_service, doc_store):
+        registry = ToolRegistry(
+            search_service=search_service, document_store=doc_store
+        ).scoped_to_document("doc1")
+
+        result = registry.execute("get_document", {"document_id": "doc2"})
+
+        assert "contrato.pdf" in result
+        assert doc_store.get_calls[-1] == "doc1"
+
+    def test_scoped_registry_limits_list_documents(self, search_service, doc_store):
+        registry = ToolRegistry(
+            search_service=search_service, document_store=doc_store
+        ).scoped_to_document("doc1")
+
+        result = registry.execute("list_documents", {})
+
+        assert "contrato.pdf" in result
+        assert "aditivo.pdf" not in result
+
+    def test_unscoped_registry_preserves_existing_behavior(
+        self, search_service, doc_store
+    ):
+        registry = ToolRegistry(search_service=search_service, document_store=doc_store)
+
+        registry.execute("search_chunks", {"query": "multa", "document_id": "doc2"})
+        list_result = registry.execute("list_documents", {})
+
+        assert search_service.calls[-1]["document_id"] == "doc2"
+        assert "contrato.pdf" in list_result
+        assert "aditivo.pdf" in list_result
+
+    def test_tool_schemas_mark_scoped_context(self, search_service, doc_store):
+        registry = ToolRegistry(
+            search_service=search_service, document_store=doc_store
+        ).scoped_to_document("doc1")
+
+        descriptions = [
+            schema["function"].get("description", "")
+            for schema in registry.tool_schemas()
+        ]
+
+        assert any("doc1" in description for description in descriptions)

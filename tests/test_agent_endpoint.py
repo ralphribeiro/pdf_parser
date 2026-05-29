@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
@@ -19,8 +19,14 @@ class _FakeAgentRunner:
     sources: list[dict[str, Any]] | None = None
     iterations: int = 2
     max_iterations: int = 8
+    calls: list[dict[str, Any]] = field(default_factory=list)
+    last_query: str | None = None
+    last_document_id: str | None = None
 
-    def run(self, query: str) -> AgentResult:
+    def run(self, query: str, document_id: str | None = None) -> AgentResult:
+        self.last_query = query
+        self.last_document_id = document_id
+        self.calls.append({"query": query, "document_id": document_id})
         return AgentResult(
             answer=self.answer,
             sources=self.sources
@@ -37,6 +43,14 @@ class _FakeAgentRunner:
         )
 
 
+class _FakeDocStore:
+    def __init__(self, docs: dict[str, dict]) -> None:
+        self._docs = docs
+
+    def get_document(self, document_id: str) -> dict | None:
+        return self._docs.get(document_id)
+
+
 @pytest.fixture()
 def client() -> TestClient:
     app = create_app(agent_runner=_FakeAgentRunner())
@@ -47,6 +61,16 @@ def client() -> TestClient:
 def client_no_agent() -> TestClient:
     app = create_app(agent_runner=None)
     return TestClient(app)
+
+
+@pytest.fixture()
+def client_with_processed_doc() -> tuple[TestClient, _FakeAgentRunner]:
+    runner = _FakeAgentRunner()
+    doc_store = _FakeDocStore(
+        {"doc-1": {"_id": "doc-1", "filename": "contrato.pdf", "status": "processed"}}
+    )
+    app = create_app(agent_runner=runner, document_store=doc_store)
+    return TestClient(app), runner
 
 
 class TestAgentSearchEndpoint:
@@ -81,3 +105,70 @@ class TestAgentSearchEndpoint:
             json={"query": "test", "max_iterations": 3},
         )
         assert resp.status_code == 200
+
+    def test_success_with_document_id_passes_scope_to_runner(
+        self, client_with_processed_doc: tuple[TestClient, _FakeAgentRunner]
+    ) -> None:
+        client, runner = client_with_processed_doc
+        resp = client.post(
+            "/agent/search",
+            json={"query": "clausulas de multa", "document_id": "doc-1"},
+        )
+        assert resp.status_code == 200
+        assert runner.calls[0]["document_id"] == "doc-1"
+        assert runner.last_query == "clausulas de multa"
+
+    def test_max_iterations_override_with_document_id(self) -> None:
+        runner = _FakeAgentRunner()
+        doc_store = _FakeDocStore(
+            {
+                "doc-1": {
+                    "_id": "doc-1",
+                    "filename": "contrato.pdf",
+                    "status": "processed",
+                }
+            }
+        )
+        app = create_app(agent_runner=runner, document_store=doc_store)
+        resp = TestClient(app).post(
+            "/agent/search",
+            json={"query": "test", "document_id": "doc-1", "max_iterations": 3},
+        )
+        assert resp.status_code == 200
+        assert runner.calls[0]["document_id"] == "doc-1"
+
+    def test_document_not_found(self) -> None:
+        runner = _FakeAgentRunner()
+        app = create_app(agent_runner=runner, document_store=_FakeDocStore({}))
+        resp = TestClient(app).post(
+            "/agent/search",
+            json={"query": "test", "document_id": "missing"},
+        )
+        assert resp.status_code == 404
+        assert not runner.calls
+
+    @pytest.mark.parametrize("status", ["pending", "processing", "failed"])
+    def test_document_not_ready(self, status: str) -> None:
+        runner = _FakeAgentRunner()
+        doc_store = _FakeDocStore(
+            {"doc-1": {"_id": "doc-1", "filename": "contrato.pdf", "status": status}}
+        )
+        app = create_app(agent_runner=runner, document_store=doc_store)
+        resp = TestClient(app).post(
+            "/agent/search",
+            json={"query": "test", "document_id": "doc-1"},
+        )
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["document_id"] == "doc-1"
+        assert resp.json()["detail"]["status"] == status
+        assert not runner.calls
+
+    def test_document_store_required_when_document_id_is_provided(self) -> None:
+        runner = _FakeAgentRunner()
+        app = create_app(agent_runner=runner)
+        resp = TestClient(app).post(
+            "/agent/search",
+            json={"query": "test", "document_id": "doc-1"},
+        )
+        assert resp.status_code == 503
+        assert not runner.calls

@@ -10,7 +10,8 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, replace
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -245,13 +246,36 @@ class ToolRegistry:
 
     search_service: Any
     document_store: Any
+    forced_document_id: str | None = None
 
     def tool_schemas(self) -> list[dict[str, Any]]:
-        return TOOL_SCHEMAS
+        schemas = deepcopy(TOOL_SCHEMAS)
+        if self.forced_document_id:
+            suffix = (
+                " Esta execucao esta restrita ao documento "
+                f"{self.forced_document_id}; ignore outros document_id."
+            )
+            for schema in schemas:
+                fn = schema.get("function", {})
+                fn["description"] = (fn.get("description", "") + suffix).strip()
+        return schemas
+
+    def scoped_to_document(self, document_id: str | None) -> ToolRegistry:
+        if document_id is None:
+            return self
+        return replace(self, forced_document_id=document_id)
 
     def execute(
         self, tool_name: str, arguments: dict[str, Any], max_chars: int = 0
     ) -> str:
+        arguments = dict(arguments)
+        if self.forced_document_id:
+            if tool_name in {"search_chunks", "search_document_text", "get_document"}:
+                arguments["document_id"] = self.forced_document_id
+            elif tool_name == "list_documents":
+                tool_name = "get_document"
+                arguments = {"document_id": self.forced_document_id}
+
         func = _TOOL_FUNCTIONS.get(tool_name)
         if func is None:
             return f"Ferramenta desconhecida: {tool_name}"

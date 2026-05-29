@@ -43,8 +43,12 @@ class _FakeToolRegistry:
 
     results: dict[str, str] = field(default_factory=dict)
     calls: list[tuple[str, dict]] = field(default_factory=list)
+    forced_document_id: str | None = None
+    scoped_calls: list[str | None] = field(default_factory=list)
+    schema_calls: list[str | None] = field(default_factory=list)
 
     def tool_schemas(self) -> list[dict[str, Any]]:
+        self.schema_calls.append(self.forced_document_id)
         return [
             {
                 "type": "function",
@@ -60,6 +64,18 @@ class _FakeToolRegistry:
     ) -> str:
         self.calls.append((tool_name, arguments))
         return self.results.get(tool_name, "result")
+
+    def scoped_to_document(self, document_id: str | None) -> _FakeToolRegistry:
+        self.scoped_calls.append(document_id)
+        if document_id is None:
+            return self
+        return _FakeToolRegistry(
+            results=self.results,
+            calls=self.calls,
+            forced_document_id=document_id,
+            scoped_calls=self.scoped_calls,
+            schema_calls=self.schema_calls,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +267,139 @@ class TestAgentRunner:
         assert tools.calls[0][0] == "search_chunks"
         assert tools.calls[0][1] == {"query": "cessao credito"}
         assert "<tool_call>" not in result.answer
+
+    def test_run_with_document_id_uses_scoped_registry(self) -> None:
+        llm = _FakeLlm([{"role": "assistant", "content": "Resposta escopada."}])
+        tools = _FakeToolRegistry()
+        agent = AgentRunner(
+            llm=llm, tool_registry=tools, max_iterations=5, context_budget=100000
+        )
+
+        agent.run("multa", document_id="doc1")
+
+        assert tools.scoped_calls == ["doc1"]
+        assert tools.schema_calls == ["doc1"]
+
+    def test_structured_tool_calls_use_scoped_registry(self) -> None:
+        llm = _FakeLlm(
+            [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {
+                                "name": "search_chunks",
+                                "arguments": json.dumps({"query": "multa"}),
+                            },
+                        }
+                    ],
+                },
+                {"role": "assistant", "content": "Resposta."},
+            ]
+        )
+        tools = _FakeToolRegistry(results={"search_chunks": "chunk result"})
+        agent = AgentRunner(
+            llm=llm, tool_registry=tools, max_iterations=5, context_budget=100000
+        )
+
+        agent.run("multa", document_id="doc1")
+
+        assert tools.scoped_calls == ["doc1"]
+        assert tools.calls == [("search_chunks", {"query": "multa"})]
+
+    def test_text_tool_calls_use_scoped_registry(self) -> None:
+        text_with_tool = (
+            "Vou buscar.\n\n"
+            "<tool_call>\n"
+            "<function=search_chunks>\n"
+            "<parameter=query>multa</parameter>\n"
+            "</function>\n"
+            "</tool_call>"
+        )
+        llm = _FakeLlm(
+            [
+                {"role": "assistant", "content": text_with_tool},
+                {"role": "assistant", "content": "Resposta."},
+            ]
+        )
+        tools = _FakeToolRegistry(results={"search_chunks": "chunk result"})
+        agent = AgentRunner(
+            llm=llm, tool_registry=tools, max_iterations=5, context_budget=100000
+        )
+
+        agent.run("multa", document_id="doc1")
+
+        assert tools.scoped_calls == ["doc1"]
+        assert tools.calls == [("search_chunks", {"query": "multa"})]
+
+    def test_scope_instruction_is_added_to_messages(self) -> None:
+        llm = _FakeLlm([{"role": "assistant", "content": "Resposta escopada."}])
+        tools = _FakeToolRegistry()
+        agent = AgentRunner(
+            llm=llm, tool_registry=tools, max_iterations=5, context_budget=100000
+        )
+
+        agent.run("multa", document_id="doc1")
+
+        first_messages = llm.messages_log[0]
+        assert any("doc1" in (m.get("content") or "") for m in first_messages)
+        assert first_messages[-1]["content"] == "multa"
+
+    def test_no_scope_keeps_current_behavior(self) -> None:
+        llm = _FakeLlm([{"role": "assistant", "content": "Resposta."}])
+        tools = _FakeToolRegistry()
+        agent = AgentRunner(
+            llm=llm, tool_registry=tools, max_iterations=5, context_budget=100000
+        )
+
+        agent.run("multa")
+
+        assert not tools.scoped_calls
+        assert tools.schema_calls == [None]
+
+    def test_tool_results_do_not_leak_between_runs(self) -> None:
+        first_chunk = json.dumps(
+            {
+                "chunk_id": "doc1:1:b1",
+                "document_id": "doc1",
+                "filename": "contrato.pdf",
+                "page": 1,
+                "text": "primeiro",
+            }
+        )
+        llm = _FakeLlm(
+            [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {
+                                "name": "search_chunks",
+                                "arguments": json.dumps({"query": "primeiro"}),
+                            },
+                        }
+                    ],
+                },
+                {"role": "assistant", "content": "Primeira resposta."},
+                {"role": "assistant", "content": "Segunda resposta sem fontes."},
+            ]
+        )
+        tools = _FakeToolRegistry(results={"search_chunks": first_chunk})
+        agent = AgentRunner(
+            llm=llm, tool_registry=tools, max_iterations=5, context_budget=100000
+        )
+
+        first = agent.run("primeira")
+        second = agent.run("segunda")
+
+        assert first.sources
+        assert not second.sources
 
     def test_text_tool_calls_stripped_on_last_iteration(self) -> None:
         """When at max_iterations, <tool_call> markup is stripped from the answer."""
