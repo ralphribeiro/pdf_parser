@@ -73,6 +73,13 @@ doc_parser/
 - Detecção de layouts multicolumna
 - Normalização de coordenadas (0-1)
 
+### API assíncrona e busca
+- Fila de jobs com Redis + worker OCR
+- Persistência de documentos no MongoDB
+- Listagem paginada de jobs e documentos (`GET /api/jobs`, `GET /api/documents`)
+- Busca semântica sobre chunks (`POST /api/search`)
+- Busca enriquecida via agente AI (`POST /api/agent/search`)
+
 ## Configuração
 
 ### Variáveis de Ambiente
@@ -111,8 +118,9 @@ Todas as configurações são controladas via variáveis de ambiente com prefixo
 | `LLM_API_URL` | (vazio) | URL da API LLM (habilita agente AI) |
 | `LLM_MODEL` | `Qwen3.5-9B-Q4_K_M` | Modelo LLM para o agente |
 | `LLM_API_KEY` | (vazio) | API key para serviço LLM externo |
-| `CHROMADB_HOST` | `http://chromadb:8000` | URL do ChromaDB |
-| `REDIS_URL` | `redis://redis:6379/0` | URL do Redis |
+| `CHROMA_HOST` | `http://chromadb:8000` | URL do ChromaDB |
+| `CHROMA_COLLECTION` | `document_embeddings` | Nome da coleção Chroma |
+| `DOC_PARSER_REDIS_URL` / `REDIS_URL` | `redis://redis:6379/0` | URL do Redis |
 
 ### Criando o arquivo `.env`
 
@@ -134,11 +142,30 @@ curl http://localhost:8090/api/jobs/healthcheck
 curl -sS -X POST http://localhost:8090/api/jobs \
   -F "file=@document.pdf;type=application/pdf" | jq
 
-# Busca semântica
+# Listar jobs
+curl -sS "http://localhost:8090/api/jobs?limit=10&offset=0" | jq
+
+# Status de um job (inclui document_id quando MongoDB está configurado)
+curl -sS "http://localhost:8090/api/jobs/{job_id}" | jq
+
+# Listar documentos
+curl -sS "http://localhost:8090/api/documents?limit=10" | jq
+
+# Documento parseado
+curl -sS "http://localhost:8090/api/documents/{document_id}" | jq
+
+# Busca semântica (filtro opcional por document_id)
 curl -sS -X POST http://localhost:8090/api/search \
   -H "content-type: application/json" \
-  -d '{"query":"contrato de locacao","n_results":5}' | jq
+  -d '{"query":"contrato de locacao","n_results":5,"filters":{"document_id":"..."}}' | jq
+
+# Busca via agente AI (requer LLM_API_URL)
+curl -sS -X POST http://localhost:8090/api/agent/search \
+  -H "content-type: application/json" \
+  -d '{"query":"quais sao as clausulas principais?"}' | jq
 ```
+
+> **Portas:** Docker expõe `8090:8080` (`localhost:8090`). `uvicorn` local usa porta **8080**.
 
 ### Instalação Local
 
@@ -165,18 +192,30 @@ uvicorn services.app:app --host 0.0.0.0 --port 8080 --workers 1
 # Nota: Use --workers 1 porque o modelo OCR é carregado uma vez na GPU
 ```
 
-#### Endpoints
+#### Endpoints REST
 
-| Método | Endpoint                   | Descrição |
-|--------|----------------------------|-----------|
-| POST   | `/api/jobs`                | Upload de PDF e criação de job |
-| GET    | `/api/jobs/{job_id}`       | Status do job |
-| GET    | `/api/jobs/healthcheck`    | Health check da API |
-| POST   | `/api/search`              | Busca semântica sobre chunks indexados |
-| GET    | `/api/documents/{id}`      | Documento parseado (MongoDB) |
-| POST   | `/api/agent/search`        | Busca enriquecida via agente AI |
-| GET    | `/`                        | UI de upload |
-| GET    | `/jobs/{job_id}`           | UI de status do job |
+Documentação interativa: `/api/docs` e `/api/redoc`.
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/jobs/healthcheck` | Health check |
+| GET | `/api/jobs` | Listar jobs (`limit`, `offset`; padrão 20/0) |
+| POST | `/api/jobs` | Upload PDF e criação de job (**202**; **409** se duplicado) |
+| GET | `/api/jobs/{job_id}` | Status do job |
+| GET | `/api/documents` | Listar documentos (**503** sem MongoDB) |
+| GET | `/api/documents/{document_id}` | Documento parseado (MongoDB) |
+| POST | `/api/search` | Busca semântica sobre chunks indexados |
+| POST | `/api/agent/search` | Busca enriquecida via agente AI (**503** sem `LLM_API_URL`) |
+
+Em `POST /api/jobs`, resposta **409** inclui `document_id` do documento já existente (hash SHA-256 duplicado).
+
+#### Rotas da UI web
+
+| Método | Caminho | Descrição |
+|--------|---------|-----------|
+| GET | `/`, `/upload`, `/jobs`, `/documents`, `/search`, `/agent` | Páginas HTML |
+| POST | `/upload` | Upload via formulário → redirect `/jobs/{job_id}` |
+| GET | `/jobs/{job_id}`, `/documents/{document_id}` | Detalhe |
 
 ### CLI
 
