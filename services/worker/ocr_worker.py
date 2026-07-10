@@ -58,17 +58,17 @@ class OcrWorker:
 
         if document_id and self.document_store:
             mongo_doc = self.document_store.get_document(document_id)
-            pdf_path = Path(mongo_doc["pdf_path"]) if mongo_doc else None
-            if pdf_path is None or not pdf_path.exists():
-                pdf_path = self.upload_dir / f"{document_id}.pdf"
+            source_path = self._resolve_source_path(
+                document_id, job.filename, mongo_doc
+            )
             self.document_store.update_status(document_id, "processing")
         else:
-            pdf_path = self.upload_dir / f"{job_id}.pdf"
+            source_path = self._resolve_source_path(job_id, job.filename, None)
 
         self.store.update_status(job_id, JobStatus.PROCESSING)
 
         try:
-            artifacts = self._artifact_fn(pdf_path, self.output_dir)
+            artifacts = self._artifact_fn(source_path, self.output_dir)
         except Exception:
             logger.exception("Job %s failed", job_id)
             self.store.update_status(
@@ -111,6 +111,32 @@ class OcrWorker:
 
         self.store.update_status(job_id, JobStatus.UPLOADED)
         logger.info("Job %s completed (document_id=%s)", job_id, document_id)
+
+    def _resolve_source_path(
+        self,
+        storage_id: str,
+        filename: str,
+        mongo_doc: dict | None,
+    ) -> Path:
+        """Resolve source_path with compatibility fallbacks for old PDF jobs."""
+        if mongo_doc is not None:
+            stored_path = mongo_doc.get("source_path") or mongo_doc.get("pdf_path")
+            if stored_path:
+                candidate = Path(stored_path)
+                if candidate.exists():
+                    return candidate
+
+        try:
+            from src.formats.registry import extension_for_filename
+
+            ext = extension_for_filename(filename)
+        except Exception:
+            ext = ".pdf"
+
+        candidate = self.upload_dir / f"{storage_id}{ext}"
+        if candidate.exists():
+            return candidate
+        return self.upload_dir / f"{storage_id}.pdf"
 
     def process_next(self) -> bool:
         """Find and process the next queued job. Returns True if one was processed."""

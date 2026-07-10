@@ -90,7 +90,7 @@ check_prerequisites() {
         ok "Arquivo .env encontrado"
     else
         warn "Arquivo .env não encontrado em ${ENV_FILE}"
-        warn "Crie com pelo menos: EMBEDDING_API_URL=<url-do-servico-de-embeddings>"
+        warn "Crie com EMBEDDING_BACKEND=api + EMBEDDING_API_URL ou EMBEDDING_BACKEND=local + EMBEDDING_MODEL"
     fi
 }
 
@@ -103,23 +103,43 @@ check_env_vars() {
 
     local missing=0
 
-    # EMBEDDING_API_URL é necessário para busca semântica
     if [ -f "${ENV_FILE}" ]; then
         # shellcheck disable=SC1090
         source "${ENV_FILE}" 2>/dev/null || true
     fi
 
-    if [ -z "${EMBEDDING_API_URL:-}" ]; then
-        warn "EMBEDDING_API_URL não definida."
-        warn "A busca semântica não funcionará sem um serviço de embeddings."
-        warn "Exemplo: EMBEDDING_API_URL=http://192.168.0.25:8080"
-        missing=1
-    else
-        ok "EMBEDDING_API_URL=${EMBEDDING_API_URL}"
+    if [ -z "${EMBEDDING_BACKEND:-}" ]; then
+        if [ -n "${EMBEDDING_API_URL:-}" ]; then
+            EMBEDDING_BACKEND="api"
+        else
+            EMBEDDING_BACKEND="local"
+        fi
     fi
+    ok "EMBEDDING_BACKEND=${EMBEDDING_BACKEND}"
 
-    EMBEDDING_MODEL="${EMBEDDING_MODEL:-Qwen3-Embedding}"
-    ok "EMBEDDING_MODEL=${EMBEDDING_MODEL}"
+    if [ "${EMBEDDING_BACKEND}" = "api" ]; then
+        if [ -z "${EMBEDDING_API_URL:-}" ]; then
+            warn "EMBEDDING_API_URL não definida para EMBEDDING_BACKEND=api."
+            warn "Exemplo: EMBEDDING_API_URL=http://192.168.0.25:8080"
+            missing=1
+        else
+            ok "EMBEDDING_API_URL=${EMBEDDING_API_URL}"
+        fi
+        EMBEDDING_MODEL="${EMBEDDING_MODEL:-Qwen3-Embedding}"
+        ok "EMBEDDING_MODEL=${EMBEDDING_MODEL}"
+    elif [ "${EMBEDDING_BACKEND}" = "local" ]; then
+        if [ -z "${EMBEDDING_MODEL:-}" ]; then
+            warn "EMBEDDING_MODEL não definida para EMBEDDING_BACKEND=local."
+            warn "Exemplo: EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+            missing=1
+        else
+            ok "EMBEDDING_MODEL=${EMBEDDING_MODEL}"
+        fi
+        ok "EMBEDDING_DEVICE=${EMBEDDING_DEVICE:-auto}"
+    else
+        warn "EMBEDDING_BACKEND deve ser 'api' ou 'local'."
+        missing=1
+    fi
 
     # LLM (agente AI)
     if [ -z "${LLM_API_URL:-}" ]; then

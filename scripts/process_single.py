@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Script to process a single PDF.
-Usage: python scripts/process_single.py <pdf_path>
+Script to process a single supported document.
+Usage: python scripts/process_single.py <source_path>
 """
 
 import argparse
@@ -14,7 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import config
-from src.pipeline import process_pdf
+from src.formats.registry import SUPPORTED_FORMAT_LABEL, detect_format
+from src.pipeline import process_file
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +27,13 @@ def _build_parser() -> argparse.ArgumentParser:
     Separated from main() to allow unit testing of argparse.
     """
     parser = argparse.ArgumentParser(
-        description="Process a PDF and extract content in JSON format"
+        description=(
+            "Process a supported document and extract content in JSON format "
+            f"({SUPPORTED_FORMAT_LABEL})"
+        )
     )
 
-    parser.add_argument("pdf_path", help="Path to the PDF file")
+    parser.add_argument("source_path", help="Path to the supported document file")
 
     parser.add_argument(
         "-o",
@@ -78,20 +82,21 @@ def main():
     # Configure logging
     config.setup_logging()
 
-    # Check if file exists
-    pdf_path = Path(args.pdf_path)
-    if not pdf_path.exists():
-        logger.error("File not found: %s", pdf_path)
+    source_path = Path(args.source_path)
+    if not source_path.exists():
+        logger.error("File not found: %s", source_path)
         sys.exit(1)
 
-    if pdf_path.suffix.lower() != ".pdf":
-        logger.error("File is not a PDF: %s", pdf_path)
-        sys.exit(1)
-
-    # Process PDF
     try:
-        document = process_pdf(
-            str(pdf_path),
+        detect_format(source_path)
+    except ValueError as exc:
+        logger.error("%s", exc)
+        sys.exit(1)
+
+    # Process document
+    try:
+        document = process_file(
+            str(source_path),
             output_dir=args.output,
             extract_tables=not args.no_tables,
             use_gpu=not args.no_gpu,
@@ -112,7 +117,7 @@ def main():
         return 0
 
     except Exception as e:
-        logger.error("Error processing PDF: %s", e, exc_info=config.VERBOSE)
+        logger.error("Error processing document: %s", e, exc_info=config.VERBOSE)
         return 1
 
     finally:

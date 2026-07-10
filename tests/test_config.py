@@ -124,6 +124,31 @@ class TestConfigDefaults:
         config = _reload_config()
         assert config.SEARCHABLE_PDF is True
 
+    def test_embedding_backend_defaults_to_local_without_api_url(self, monkeypatch):
+        monkeypatch.delenv("EMBEDDING_API_URL", raising=False)
+        monkeypatch.delenv("DOC_PARSER_EMBEDDING_API_URL", raising=False)
+        monkeypatch.delenv("EMBEDDING_BACKEND", raising=False)
+        monkeypatch.delenv("DOC_PARSER_EMBEDDING_BACKEND", raising=False)
+        monkeypatch.delenv("EMBEDDING_MODEL", raising=False)
+        monkeypatch.delenv("DOC_PARSER_EMBEDDING_MODEL", raising=False)
+
+        config = _reload_config()
+
+        assert config.EMBEDDING_BACKEND == "local"
+        assert config.EMBEDDING_MODEL == ""
+
+    def test_embedding_backend_defaults_to_api_with_api_url(self, monkeypatch):
+        monkeypatch.setenv("EMBEDDING_API_URL", "http://embed.local")
+        monkeypatch.delenv("EMBEDDING_BACKEND", raising=False)
+        monkeypatch.delenv("DOC_PARSER_EMBEDDING_BACKEND", raising=False)
+        monkeypatch.delenv("EMBEDDING_MODEL", raising=False)
+        monkeypatch.delenv("DOC_PARSER_EMBEDDING_MODEL", raising=False)
+
+        config = _reload_config()
+
+        assert config.EMBEDDING_BACKEND == "api"
+        assert config.EMBEDDING_MODEL == "Qwen3-Embedding"
+
 
 # =========================================================================
 # Env var overrides
@@ -208,6 +233,23 @@ class TestConfigEnvOverrides:
         monkeypatch.setenv("DOC_PARSER_SEARCHABLE_PDF", "false")
         config = _reload_config()
         assert config.SEARCHABLE_PDF is False
+
+    def test_local_embedding_settings_from_env(self, monkeypatch):
+        monkeypatch.setenv("EMBEDDING_BACKEND", "local")
+        monkeypatch.setenv("EMBEDDING_MODEL", "sentence-transformers/test")
+        monkeypatch.setenv("EMBEDDING_DEVICE", "cpu")
+        monkeypatch.setenv("EMBEDDING_TRUST_REMOTE_CODE", "true")
+        monkeypatch.setenv("EMBEDDING_BATCH_SIZE", "4")
+        monkeypatch.setenv("EMBEDDING_MAX_CHARS", "1234")
+
+        config = _reload_config()
+
+        assert config.EMBEDDING_BACKEND == "local"
+        assert config.EMBEDDING_MODEL == "sentence-transformers/test"
+        assert config.EMBEDDING_DEVICE == "cpu"
+        assert config.EMBEDDING_TRUST_REMOTE_CODE is True
+        assert config.EMBEDDING_BATCH_SIZE == 4
+        assert config.EMBEDDING_MAX_CHARS == 1234
 
 
 # =========================================================================

@@ -42,14 +42,19 @@ class DocumentStore:
         file_hash: str,
         filename: str,
         file_size: int,
-        pdf_path: str,
+        pdf_path: str = "",
+        source_path: str | None = None,
+        content_type: str | None = None,
     ) -> str:
         """Insert a new document record and return its document_id (str)."""
+        stored_source_path = source_path if source_path is not None else pdf_path
         doc = {
             "file_hash": file_hash,
             "filename": filename,
             "file_size": file_size,
-            "pdf_path": pdf_path,
+            "source_path": stored_source_path,
+            "content_type": content_type,
+            "pdf_path": pdf_path or stored_source_path,
             "status": "pending",
             "created_at": datetime.now(),
             "processed_at": None,
@@ -62,11 +67,15 @@ class DocumentStore:
 
     def find_by_hash(self, file_hash: str) -> dict | None:
         """Return the document with the given SHA-256 hash, or None."""
-        return self.collection.find_one({"file_hash": file_hash})
+        return self._with_legacy_paths(
+            self.collection.find_one({"file_hash": file_hash})
+        )
 
     def get_document(self, document_id: str) -> dict | None:
         """Return a document by its _id, or None."""
-        return self.collection.find_one({"_id": _to_object_id(document_id)})
+        return self._with_legacy_paths(
+            self.collection.find_one({"_id": _to_object_id(document_id)})
+        )
 
     def save_parsed(
         self,
@@ -119,12 +128,15 @@ class DocumentStore:
             "total_pages": 1,
             "created_at": 1,
             "file_size": 1,
+            "source_path": 1,
+            "content_type": 1,
+            "pdf_path": 1,
         }
         cursor = self.collection.find(query, projection).skip(offset).limit(limit)
         results: list[dict] = []
         for doc in cursor:
             doc["_id"] = str(doc["_id"])
-            results.append(doc)
+            results.append(self._with_legacy_paths(doc))
         return results
 
     def count_documents(self, *, status: str | None = None) -> int:
@@ -158,10 +170,37 @@ class DocumentStore:
 
     def update_pdf_path(self, document_id: str, pdf_path: str) -> None:
         """Set the filesystem path of the stored PDF."""
+        self.update_source_path(document_id, pdf_path, content_type="application/pdf")
+
+    def update_source_path(
+        self,
+        document_id: str,
+        source_path: str,
+        *,
+        content_type: str | None = None,
+    ) -> None:
+        """Set the filesystem path and content type of the stored source file."""
+        update: dict[str, Any] = {
+            "source_path": source_path,
+            "pdf_path": source_path,
+        }
+        if content_type is not None:
+            update["content_type"] = content_type
         self.collection.update_one(
             {"_id": _to_object_id(document_id)},
-            {"$set": {"pdf_path": pdf_path}},
+            {"$set": update},
         )
+
+    @staticmethod
+    def _with_legacy_paths(doc: dict | None) -> dict | None:
+        """Normalize source_path/pdf_path fields for legacy records."""
+        if doc is None:
+            return None
+        if not doc.get("source_path") and doc.get("pdf_path"):
+            doc["source_path"] = doc["pdf_path"]
+        if not doc.get("pdf_path") and doc.get("source_path"):
+            doc["pdf_path"] = doc["source_path"]
+        return doc
 
     @classmethod
     def from_url(cls, url: str, db_name: str) -> DocumentStore:

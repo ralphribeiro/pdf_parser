@@ -78,11 +78,27 @@ class TestDocumentStoreCreate:
         assert doc["filename"] == "contract.pdf"
         assert doc["file_size"] == 5000
         assert doc["pdf_path"] == "data/contract.pdf"
+        assert doc["source_path"] == "data/contract.pdf"
         assert doc["status"] == "pending"
         assert isinstance(doc["created_at"], datetime)
         assert doc["processed_at"] is None
         assert doc["parsed_document"] is None
         assert doc["total_pages"] is None
+
+    def test_create_stores_source_path_and_content_type(self):
+        store = _make_store()
+        doc_id = store.create_document(
+            file_hash="sha256hash",
+            filename="notes.txt",
+            file_size=50,
+            source_path="data/notes.txt",
+            content_type="text/plain",
+        )
+        doc = store.get_document(doc_id)
+        assert doc is not None
+        assert doc["source_path"] == "data/notes.txt"
+        assert doc["pdf_path"] == "data/notes.txt"
+        assert doc["content_type"] == "text/plain"
 
 
 class TestDocumentStoreFindByHash:
@@ -119,6 +135,21 @@ class TestDocumentStoreGetDocument:
     def test_get_nonexistent_returns_none(self):
         store = _make_store()
         assert store.get_document("nonexistent_id") is None
+
+    def test_get_legacy_pdf_path_fills_source_path(self):
+        store = _make_store()
+        doc_id = store.create_document(
+            file_hash="h1",
+            filename="a.pdf",
+            file_size=10,
+            pdf_path="data/a.pdf",
+        )
+        store.collection._docs[doc_id].pop("source_path")
+
+        doc = store.get_document(doc_id)
+
+        assert doc is not None
+        assert doc["source_path"] == "data/a.pdf"
 
 
 class TestDocumentStoreSaveParsed:
@@ -168,3 +199,23 @@ class TestDocumentStoreUpdateStatus:
         assert doc is not None
         assert doc["status"] == "failed"
         assert doc["error_message"] == "OCR crashed"
+
+
+class TestDocumentStoreSourcePath:
+    def test_update_source_path(self):
+        store = _make_store()
+        doc_id = store.create_document(
+            file_hash="h5",
+            filename="notes.txt",
+            file_size=20,
+            source_path="",
+        )
+        store.update_source_path(
+            doc_id, "data/notes.txt", content_type="text/plain"
+        )
+
+        doc = store.get_document(doc_id)
+        assert doc is not None
+        assert doc["source_path"] == "data/notes.txt"
+        assert doc["pdf_path"] == "data/notes.txt"
+        assert doc["content_type"] == "text/plain"

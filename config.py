@@ -51,6 +51,24 @@ def _env_int_or_none(key: str, default: int | None) -> int | None:
     return int(val) if val else default
 
 
+def _env_bool_any(keys: tuple[str, ...], default: bool) -> bool:
+    """Read the first present env var from keys as bool."""
+    for key in keys:
+        val = os.getenv(key)
+        if val is not None:
+            return val.lower() in ("true", "1", "yes")
+    return default
+
+
+def _env_int_any(keys: tuple[str, ...], default: int) -> int:
+    """Read the first present env var from keys as int."""
+    for key in keys:
+        val = os.getenv(key)
+        if val is not None:
+            return int(val)
+    return default
+
+
 # ---------------------------------------------------------------------------
 # Directories
 # ---------------------------------------------------------------------------
@@ -181,7 +199,7 @@ MONGO_URL = os.getenv("MONGO_URL") or os.getenv("DOC_PARSER_MONGO_URL", "")
 MONGO_DB = os.getenv("MONGO_DB") or os.getenv("DOC_PARSER_MONGO_DB", "doc_parser")
 
 # ---------------------------------------------------------------------------
-# Semantic Search (ChromaDB + Embedding API)
+# Semantic Search (ChromaDB + Embeddings)
 # ---------------------------------------------------------------------------
 
 CHROMA_HOST = os.getenv("CHROMA_HOST") or os.getenv("DOC_PARSER_CHROMA_HOST", "")
@@ -191,8 +209,28 @@ CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION") or os.getenv(
 EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL") or os.getenv(
     "DOC_PARSER_EMBEDDING_API_URL", ""
 )
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL") or os.getenv(
-    "DOC_PARSER_EMBEDDING_MODEL", "Qwen3-Embedding"
+_embedding_backend_raw = os.getenv("EMBEDDING_BACKEND") or os.getenv(
+    "DOC_PARSER_EMBEDDING_BACKEND", ""
+)
+EMBEDDING_BACKEND = (
+    _embedding_backend_raw.lower()
+    if _embedding_backend_raw
+    else ("api" if EMBEDDING_API_URL else "local")
+)
+_embedding_model_raw = os.getenv("EMBEDDING_MODEL") or os.getenv(
+    "DOC_PARSER_EMBEDDING_MODEL"
+)
+EMBEDDING_MODEL = (
+    _embedding_model_raw
+    if _embedding_model_raw is not None
+    else ("Qwen3-Embedding" if EMBEDDING_BACKEND == "api" else "")
+)
+EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE") or os.getenv(
+    "DOC_PARSER_EMBEDDING_DEVICE", "auto"
+)
+EMBEDDING_TRUST_REMOTE_CODE = _env_bool_any(
+    ("EMBEDDING_TRUST_REMOTE_CODE", "DOC_PARSER_EMBEDDING_TRUST_REMOTE_CODE"),
+    False,
 )
 _embedding_timeout_raw = (
     os.getenv("EMBEDDING_TIMEOUT_SECONDS")
@@ -201,7 +239,12 @@ _embedding_timeout_raw = (
 )
 EMBEDDING_TIMEOUT_SECONDS = float(_embedding_timeout_raw)
 
-EMBEDDING_BATCH_SIZE = _env_int("DOC_PARSER_EMBEDDING_BATCH_SIZE", 32)
+EMBEDDING_BATCH_SIZE = _env_int_any(
+    ("EMBEDDING_BATCH_SIZE", "DOC_PARSER_EMBEDDING_BATCH_SIZE"), 32
+)
+EMBEDDING_MAX_CHARS = _env_int_any(
+    ("EMBEDDING_MAX_CHARS", "DOC_PARSER_EMBEDDING_MAX_CHARS"), 6000
+)
 EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY") or os.getenv(
     "DOC_PARSER_EMBEDDING_API_KEY", ""
 )

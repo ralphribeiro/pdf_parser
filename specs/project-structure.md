@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-Este é um pipeline de processamento de documentos PDF para extração de texto e tabelas de PDFs mistos (digitais e digitalizados/escaneados), com saída em JSON e geração de PDFs pesquisáveis.
+Este é um pipeline de processamento de documentos para extração de texto e tabelas de PDFs mistos (digitais e digitalizados/escaneados), imagens, Office e texto, com saída em JSON e geração de PDFs pesquisáveis.
 
 ## Arquitetura
 
@@ -23,6 +23,13 @@ doc_parser/
 ├── src/                          # Pipeline de processamento principal
 │   ├── pipeline.py               # Orquestrador principal (sequencial + paralela)
 │   ├── detector.py               # Detecção de tipo de página (digital/scan/hybrid)
+│   ├── formats/
+│   │   ├── registry.py           # Formatos suportados, extensões e magic bytes
+│   │   ├── dispatcher.py         # Roteia arquivos para o extrator correto
+│   │   ├── image.py              # Imagens via OCR existente
+│   │   ├── docx.py               # Parágrafos DOCX via python-docx
+│   │   ├── odt.py                # Parágrafos ODT via odfpy
+│   │   └── plain_text.py         # TXT/MD como páginas digitais virtuais
 │   ├── extractors/
 │   │   ├── digital.py            # Extração de PDF digital (pdfplumber)
 │   │   ├── ocr.py                # OCR com docTR (PyTorch)
@@ -49,9 +56,12 @@ doc_parser/
 
 ## Funcionalidades Principais
 
-### Extração de PDF
+### Extração de documentos
 - **PDFs Digitais**: Extração direta de texto com `pdfplumber`
 - **PDFs Digitalizados**: OCR com `docTR` (PyTorch + GPU) ou `Tesseract` (LSTM, CPU)
+- **Imagens**: JPG/JPEG, PNG e TIFF processados como uma página OCR
+- **Office**: DOCX e ODT extraídos como texto digital com bbox sintético
+- **Texto**: TXT e MD extraídos por parágrafos em uma página virtual
 - **Tabelas**: Detecção e extração com `camelot-py`
 - **PDFs Pesquisáveis**: Sobreposição de texto invisível em páginas escaneadas
 - **Processamento Paralelo**: Processamento concorrente de páginas com `ProcessPoolExecutor`
@@ -75,7 +85,7 @@ doc_parser/
 
 ### API assíncrona e busca
 - Fila de jobs com Redis + worker OCR
-- Persistência de documentos no MongoDB
+- Persistência de documentos no MongoDB com `source_path`/`content_type` e compatibilidade legada com `pdf_path`
 - Listagem paginada de jobs e documentos (`GET /api/jobs`, `GET /api/documents`)
 - Busca semântica sobre chunks (`POST /api/search`)
 - Busca enriquecida via agente AI (`POST /api/agent/search`)
@@ -138,7 +148,7 @@ docker compose up --build -d
 # Health check
 curl http://localhost:8090/api/jobs/healthcheck
 
-# Criar job assíncrono
+# Criar job assíncrono (PDF, imagens, DOCX, ODT, TXT, MD)
 curl -sS -X POST http://localhost:8090/api/jobs \
   -F "file=@document.pdf;type=application/pdf" | jq
 
@@ -200,7 +210,7 @@ Documentação interativa: `/api/docs` e `/api/redoc`.
 |--------|----------|-----------|
 | GET | `/api/jobs/healthcheck` | Health check |
 | GET | `/api/jobs` | Listar jobs (`limit`, `offset`; padrão 20/0) |
-| POST | `/api/jobs` | Upload PDF e criação de job (**202**; **409** se duplicado) |
+| POST | `/api/jobs` | Upload de documento suportado e criação de job (**202**; **409** se duplicado) |
 | GET | `/api/jobs/{job_id}` | Status do job |
 | GET | `/api/documents` | Listar documentos (**503** sem MongoDB) |
 | GET | `/api/documents/{document_id}` | Documento parseado (MongoDB) |
@@ -226,8 +236,11 @@ as ferramentas ficam restritas ao documento escolhido.
 ### CLI
 
 ```bash
-# Processar PDF único
+# Processar documento único
 python scripts/process_single.py document.pdf
+python scripts/process_single.py scan.png
+python scripts/process_single.py contrato.docx
+python scripts/process_single.py notas.md
 
 # Especificar diretório de saída
 python scripts/process_single.py document.pdf -o /path/to/output
@@ -238,11 +251,8 @@ python scripts/process_single.py document.pdf --no-tables
 # Forçar CPU
 python scripts/process_single.py document.pdf --no-gpu
 
-# Usar Tesseract
-python scripts/process_single.py document.pdf --ocr-engine tesseract
-
 # Gerar PDF pesquisável
-python scripts/process_single.py document.pdf --searchable-pdf
+python scripts/process_single.py document.pdf --pdf
 
 # Modo quiet
 python scripts/process_single.py document.pdf --quiet
@@ -317,7 +327,7 @@ Todas as coordenadas são normalizadas (0–1) no formato `[x1, y1, x2, y2]`:
 ## Scripts
 
 ### process_single.py
-Script CLI para processamento de PDF único com opções de configuração.
+Script CLI para processamento de documento único com opções de configuração.
 
 ### llm_postprocess.py
 Pós-processamento contextual de texto OCR via LLM (Ollama).
@@ -354,6 +364,7 @@ pytest -v
 - [x] Persistência de documentos (MongoDB)
 - [x] Busca semântica sobre chunks indexados
 - [x] Agente AI para busca enriquecida (ReAct loop)
+- [x] Ingest multi-formato (PDF, imagens, DOCX, ODT, TXT, MD)
 - [ ] Melhor detecção de tabelas em PDFs digitalizados
 - [ ] Detecção e classificação de assinaturas
 - [ ] Processamento em lote de múltiplos PDFs

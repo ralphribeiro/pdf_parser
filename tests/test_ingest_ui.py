@@ -56,6 +56,13 @@ class TestUploadPage:
         resp = TestClient(app).get("/upload")
         assert 'type="file"' in resp.text
 
+    def test_accepts_supported_extensions(self, tmp_path):
+        app, _ = _make_app(tmp_path)
+        resp = TestClient(app).get("/upload")
+        assert ".pdf" in resp.text
+        assert ".docx" in resp.text
+        assert ".txt" in resp.text
+
     def test_has_multipart_form(self, tmp_path):
         app, _ = _make_app(tmp_path)
         resp = TestClient(app).get("/upload")
@@ -108,16 +115,39 @@ class TestUploadAction:
         assert saved.exists()
         assert saved.read_bytes()[:5] == b"%PDF-"
 
-    def test_non_pdf_extension_shows_error(self, tmp_path):
+    def test_valid_text_redirects_to_status(self, tmp_path):
         app, _ = _make_app(tmp_path)
-        client = TestClient(app)
+        client = TestClient(app, follow_redirects=False)
         resp = client.post(
             "/upload",
             files={"file": ("notes.txt", b"hello", "text/plain")},
         )
+        assert resp.status_code == 303
+        assert "/jobs/" in resp.headers["location"]
+
+    def test_text_upload_saves_txt_extension(self, tmp_path):
+        app, _store = _make_app(tmp_path)
+        upload_dir = tmp_path / "uploads"
+        client = TestClient(app, follow_redirects=False)
+        resp = client.post(
+            "/upload",
+            files={"file": ("notes.txt", b"hello", "text/plain")},
+        )
+        job_id = resp.headers["location"].split("/jobs/")[-1]
+        saved = upload_dir / f"{job_id}.txt"
+        assert saved.exists()
+        assert saved.read_text(encoding="utf-8") == "hello"
+
+    def test_unsupported_extension_shows_error(self, tmp_path):
+        app, _ = _make_app(tmp_path)
+        client = TestClient(app)
+        resp = client.post(
+            "/upload",
+            files={"file": ("notes.exe", b"hello", "application/octet-stream")},
+        )
         assert "text/html" in resp.headers["content-type"]
         html = resp.text.lower()
-        assert "pdf" in html
+        assert "formato" in html or "unsupported" in html
 
     def test_invalid_pdf_content_shows_error(self, tmp_path):
         app, _ = _make_app(tmp_path)

@@ -28,6 +28,8 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    networks:
+      - internal_network
     restart: unless-stopped
 
   mongodb:
@@ -37,6 +39,8 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    networks:
+      - internal_network
     restart: unless-stopped
 
   chromadb:
@@ -49,6 +53,8 @@ services:
     environment:
       - ANONYMIZED_TELEMETRY=FALSE
       - IS_PERSISTENT=TRUE
+    networks:
+      - internal_network
     restart: unless-stopped
 
   api:
@@ -63,6 +69,10 @@ services:
       - ./data:/app/data
       - output:/app/output
       - doctr-cache:/root/.cache
+      - embedding-cache:/root/.cache/huggingface
+    # Local semantic search runs inside this API container for POST /search.
+    # If EMBEDDING_BACKEND=local and EMBEDDING_DEVICE=cuda, grant GPU access here
+    # too (mirroring the worker devices/group_add/security settings below).
     depends_on:
       - redis
       - mongodb
@@ -73,15 +83,23 @@ services:
       - DOC_PARSER_REDIS_URL=redis://redis:6379/0
       - MONGO_URL=mongodb://mongodb:27017
       - CHROMA_HOST=http://chromadb:8000
-      - EMBEDDING_API_URL=${EMBEDDING_API_URL}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-Qwen3-Embedding}
+      - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-}
+      - EMBEDDING_API_URL=${EMBEDDING_API_URL:-}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
+      - EMBEDDING_DEVICE=${EMBEDDING_DEVICE:-auto}
+      - EMBEDDING_TRUST_REMOTE_CODE=${EMBEDDING_TRUST_REMOTE_CODE:-false}
+      - EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-32}
+      - EMBEDDING_MAX_CHARS=${EMBEDDING_MAX_CHARS:-6000}
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
+      - HF_HOME=/root/.cache/huggingface
       - LLM_API_URL=${LLM_API_URL}
       - LLM_MODEL=${LLM_MODEL:-Qwen3.5-9B-Q4_K_M}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - HSA_OVERRIDE_GFX_VERSION=11.0.0
       - PYTORCH_HIP_ALLOC_CONF=max_split_size_mb:512
     restart: unless-stopped
+    networks:
+      - internal_network
 
   worker:
     build: .
@@ -91,6 +109,7 @@ services:
       - ./data:/app/data
       - output:/app/output
       - doctr-cache:/root/.cache
+      - embedding-cache:/root/.cache/huggingface
 
     # AMD GPU access via ROCm (worker runs OCR)
     devices:
@@ -114,14 +133,22 @@ services:
       - DOC_PARSER_REDIS_URL=redis://redis:6379/0
       - MONGO_URL=mongodb://mongodb:27017
       - CHROMA_HOST=http://chromadb:8000
-      - EMBEDDING_API_URL=${EMBEDDING_API_URL}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-Qwen3-Embedding}
+      - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-}
+      - EMBEDDING_API_URL=${EMBEDDING_API_URL:-}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
+      - EMBEDDING_DEVICE=${EMBEDDING_DEVICE:-auto}
+      - EMBEDDING_TRUST_REMOTE_CODE=${EMBEDDING_TRUST_REMOTE_CODE:-false}
+      - EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-32}
+      - EMBEDDING_MAX_CHARS=${EMBEDDING_MAX_CHARS:-6000}
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
+      - HF_HOME=/root/.cache/huggingface
       - HSA_OVERRIDE_GFX_VERSION=11.0.0
       - PYTORCH_HIP_ALLOC_CONF=max_split_size_mb:512
     healthcheck:
       disable: true
     restart: unless-stopped
+    networks:
+      - internal_network
 
 volumes:
   redis-data:
@@ -129,3 +156,9 @@ volumes:
   chroma-data:
   output:
   doctr-cache:
+  embedding-cache:
+
+networks:
+  internal_network:
+    name: doc_parser_network
+    driver: bridge

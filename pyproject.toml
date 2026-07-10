@@ -38,6 +38,10 @@ dependencies = [
     # --- PDF Output ---
     "reportlab>=4.0.0",             # PDF generation (searchable text overlay)
 
+    # --- Office Documents ---
+    "python-docx>=1.1.0",           # DOCX paragraph extraction
+    "odfpy>=1.4.0",                 # ODT paragraph extraction
+
     # --- API ---
     "fastapi>=0.115.0",             # Async web framework
     "uvicorn[standard]>=0.30.0",    # ASGI server
@@ -47,6 +51,7 @@ dependencies = [
     "redis>=5.0.0",                 # Redis client for shared job store
     "pymongo>=4.7.0",               # MongoDB client for document store
     "chromadb>=0.4.0",              # Vector store for semantic search
+    "sentence-transformers",        # Local Hugging Face embedding models
 
     # --- Utilities ---
     "pydantic>=2.5.0",              # JSON schema validation

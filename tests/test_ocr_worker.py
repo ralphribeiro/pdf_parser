@@ -204,6 +204,71 @@ class TestOcrWorkerProcessJob:
         call_args = mock_fn.call_args
         assert str(call_args[0][0]).endswith(".pdf")
 
+    def test_calls_artifact_fn_with_non_pdf_extension(self, tmp_path):
+        store = JobStore()
+        mock_fn = MagicMock()
+
+        from src.pipeline import ArtifactResult
+
+        mock_fn.return_value = ArtifactResult(
+            json_path=tmp_path / "x.json",
+            pdf_path=tmp_path / "x.pdf",
+            document=MagicMock(),
+        )
+        (tmp_path / "x.json").write_text("{}")
+        (tmp_path / "x.pdf").write_bytes(b"%PDF-1.4")
+
+        worker = self._make_worker(store, tmp_path, artifact_fn=mock_fn)
+        job = store.create("notes.txt")
+        source = worker.upload_dir / f"{job.job_id}.txt"
+        source.write_text("hello", encoding="utf-8")
+
+        worker.process_job(job.job_id)
+
+        mock_fn.assert_called_once()
+        assert str(mock_fn.call_args.args[0]).endswith(".txt")
+
+    def test_uses_document_store_source_path(self, tmp_path):
+        store = JobStore()
+        mock_fn = MagicMock()
+
+        from src.models.schemas import Document, Page
+        from src.pipeline import ArtifactResult
+
+        mock_fn.return_value = ArtifactResult(
+            json_path=tmp_path / "x.json",
+            pdf_path=tmp_path / "x.pdf",
+            document=Document(
+                doc_id="doc1",
+                source_file="notes.txt",
+                total_pages=1,
+                pages=[Page(page=1, source="digital", blocks=[])],
+            ),
+        )
+        (tmp_path / "x.json").write_text("{}")
+        (tmp_path / "x.pdf").write_bytes(b"%PDF-1.4")
+
+        source = tmp_path / "uploads" / "doc123.txt"
+        source.parent.mkdir(exist_ok=True)
+        source.write_text("hello", encoding="utf-8")
+        document_store = MagicMock()
+        document_store.get_document.return_value = {"source_path": str(source)}
+
+        from services.worker.ocr_worker import OcrWorker
+
+        worker = OcrWorker(
+            store=store,
+            upload_dir=source.parent,
+            output_dir=tmp_path / "output",
+            artifact_fn=mock_fn,
+            document_store=document_store,
+        )
+        job = store.create("notes.txt", document_id="doc123")
+
+        worker.process_job(job.job_id)
+
+        assert mock_fn.call_args.args[0] == source
+
     def test_sets_status_to_uploaded(self, tmp_path):
         store = JobStore()
         worker = self._make_worker(store, tmp_path)

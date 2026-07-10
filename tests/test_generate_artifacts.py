@@ -234,6 +234,24 @@ class TestGenerateArtifacts:
         with pytest.raises(FileNotFoundError):
             generate_artifacts("/nonexistent/file.pdf", str(output_dir))
 
+    def test_text_file_creates_json_and_pdf(self, tmp_path, output_dir):
+        """generate_artifacts should support non-PDF documents."""
+        from src.pipeline import generate_artifacts
+
+        text_path = tmp_path / "notes.txt"
+        text_path.write_text("First paragraph\n\nSecond paragraph", encoding="utf-8")
+
+        result = generate_artifacts(text_path, output_dir)
+
+        assert result.json_path.exists()
+        assert result.pdf_path.exists()
+        assert result.document.source_file == "notes.txt"
+        assert result.document.pages[0].source == "digital"
+        assert [b.text for b in result.document.pages[0].blocks] == [
+            "First paragraph",
+            "Second paragraph",
+        ]
+
     @staticmethod
     def _patch_processor(monkeypatch, pipeline_module, sample_document):
         """Patch DocumentProcessor to avoid loading OCR engines."""

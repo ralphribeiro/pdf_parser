@@ -1,11 +1,13 @@
 # Document Parser Pipeline
 
-Local pipeline for text and structure extraction from mixed PDFs (digital and scanned), with JSON output and searchable PDF generation. Supports GPU-accelerated OCR via ROCm (AMD) or CUDA (NVIDIA).
+Local pipeline for text and structure extraction from PDFs, images, Office documents, and text files, with JSON output and searchable PDF generation. Supports GPU-accelerated OCR via ROCm (AMD) or CUDA (NVIDIA).
 
 ## Features
 
 - **Digital PDFs**: Direct text extraction with `pdfplumber`
 - **Scanned PDFs**: OCR with `docTR` (PyTorch + GPU) or `Tesseract` (LSTM, CPU)
+- **Images**: JPG/JPEG, PNG, and TIFF routed through the OCR stack
+- **Office/Text documents**: DOCX, ODT, TXT, and MD converted to virtual digital pages
 - **Tables**: Detection and extraction with `camelot-py`
 - **Searchable PDFs**: Invisible text overlay on scanned pages for search/selection
 - **Parallel processing**: Concurrent page processing with `ProcessPoolExecutor`
@@ -30,7 +32,7 @@ docker compose up --build -d
 # Health check
 curl http://localhost:8090/api/jobs/healthcheck
 
-# 1) Create async job
+# 1) Create async job (PDF, image, DOCX, ODT, TXT, or MD)
 JOB_ID=$(
   curl -sS -X POST http://localhost:8090/api/jobs \
     -F "file=@document.pdf;type=application/pdf" | jq -r '.job_id'
@@ -109,7 +111,7 @@ Interactive OpenAPI docs: `/api/docs` and `/api/redoc` (same host/port as the ap
 |--------|----------|-------------|
 | GET | `/api/jobs/healthcheck` | Ingest API healthcheck |
 | GET | `/api/jobs` | List jobs (`limit`, `offset`; default 20/0) |
-| POST | `/api/jobs` | Upload PDF and create job (**202**; **409** if duplicate) |
+| POST | `/api/jobs` | Upload supported document and create job (**202**; **409** if duplicate) |
 | GET | `/api/jobs/{job_id}` | Get job status |
 | GET | `/api/documents` | List documents (**503** without MongoDB) |
 | GET | `/api/documents/{document_id}` | Parsed document from MongoDB |
@@ -141,6 +143,23 @@ curl -X POST http://localhost:8080/api/search \
   }'
 ```
 
+#### Semantic Search Embeddings
+
+Semantic search supports two embedding backends:
+
+- `EMBEDDING_BACKEND=api`: calls an OpenAI-compatible `/v1/embeddings` service
+  at `EMBEDDING_API_URL`. This keeps the existing remote embedding behavior.
+- `EMBEDDING_BACKEND=local`: runs a Hugging Face sentence-transformers model in
+  the API and worker processes. Set `EMBEDDING_MODEL` to a compatible model ID
+  or local model path; there is no hardcoded default for the local backend.
+
+For local embeddings, examples include
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`,
+`intfloat/multilingual-e5-small`, and `BAAI/bge-m3`. Model files are cached in
+the Hugging Face cache volume when using Docker. If you change
+`EMBEDDING_MODEL` or switch backends, reprocess/reindex documents so ChromaDB
+does not mix vectors from different models.
+
 #### `POST /api/agent/search` payload
 
 The same `document_id` rule applies here. When set, the backend enforces that
@@ -160,8 +179,11 @@ curl -X POST http://localhost:8080/api/agent/search \
 ### CLI
 
 ```bash
-# Process a single PDF
+# Process a single supported document
 python scripts/process_single.py document.pdf
+python scripts/process_single.py scan.png
+python scripts/process_single.py contract.docx
+python scripts/process_single.py notes.txt
 
 # Specify output directory
 python scripts/process_single.py document.pdf -o /path/to/output
@@ -172,11 +194,8 @@ python scripts/process_single.py document.pdf --no-tables
 # Force CPU usage
 python scripts/process_single.py document.pdf --no-gpu
 
-# Use Tesseract instead of docTR
-python scripts/process_single.py document.pdf --ocr-engine tesseract
-
 # Generate searchable PDF
-python scripts/process_single.py document.pdf --searchable-pdf
+python scripts/process_single.py document.pdf --pdf
 
 # Quiet mode
 python scripts/process_single.py document.pdf --quiet
@@ -199,6 +218,10 @@ processor.save_to_json(doc, "output.json", indent=4)
 # Save searchable PDF
 processor.save_to_searchable_pdf(doc, "document.pdf", "searchable_output.pdf")
 ```
+
+For non-PDF inputs, use `src.pipeline.process_file()` or `generate_artifacts()`.
+DOCX, ODT, TXT, and MD are represented as one virtual digital page with stable
+synthetic bounding boxes. Images are represented as one OCR page.
 
 ## JSON Output Structure
 
@@ -280,10 +303,15 @@ cp .env.example .env
 | `MONGO_DB` | `doc_parser` | MongoDB database name |
 | `CHROMA_HOST` / `DOC_PARSER_CHROMA_HOST` | empty | ChromaDB host URL (e.g. `http://chromadb:8000`) |
 | `CHROMA_COLLECTION` / `DOC_PARSER_CHROMA_COLLECTION` | `document_embeddings` | Chroma collection name |
-| `EMBEDDING_API_URL` / `DOC_PARSER_EMBEDDING_API_URL` | empty | Remote embedding API base URL |
-| `EMBEDDING_MODEL` / `DOC_PARSER_EMBEDDING_MODEL` | `Qwen3-Embedding` | Embedding model name |
+| `EMBEDDING_BACKEND` / `DOC_PARSER_EMBEDDING_BACKEND` | `api` if API URL is set, else `local` | Embedding backend: `api` or `local` |
+| `EMBEDDING_API_URL` / `DOC_PARSER_EMBEDDING_API_URL` | empty | Remote embedding API base URL; required only for `backend=api` |
+| `EMBEDDING_MODEL` / `DOC_PARSER_EMBEDDING_MODEL` | `Qwen3-Embedding` for `backend=api`; empty for `backend=local` | Remote model name or local Hugging Face model/path |
+| `EMBEDDING_DEVICE` / `DOC_PARSER_EMBEDDING_DEVICE` | `auto` | Local embedding device: `auto`, `cpu`, or `cuda` |
+| `EMBEDDING_TRUST_REMOTE_CODE` / `DOC_PARSER_EMBEDDING_TRUST_REMOTE_CODE` | `false` | Allow custom HF model code for local embeddings |
+| `EMBEDDING_BATCH_SIZE` / `DOC_PARSER_EMBEDDING_BATCH_SIZE` | `32` | Embedding batch size |
+| `EMBEDDING_MAX_CHARS` / `DOC_PARSER_EMBEDDING_MAX_CHARS` | `6000` | Max characters per text before embedding |
 | `EMBEDDING_API_KEY` | empty | Embedding API key |
-| `EMBEDDING_TIMEOUT_SECONDS` / `DOC_PARSER_EMBEDDING_TIMEOUT_SECONDS` | `10` | Embedding API timeout |
+| `EMBEDDING_TIMEOUT_SECONDS` / `DOC_PARSER_EMBEDDING_TIMEOUT_SECONDS` | `120` | Embedding API timeout |
 | `LLM_API_URL` | empty | LLM API URL (enables agent search when set) |
 | `LLM_MODEL` | `Qwen3.5-9B-Q4_K_M` | LLM model name |
 | `LLM_API_KEY` | empty | LLM API key |
@@ -300,11 +328,18 @@ doc_parser/
 │   ├── ingest_api/               # REST API (/api/jobs, /api/search, /api/agent)
 │   ├── ingest_ui/                # HTML UI (/, /jobs, /documents, /search, /agent)
 │   ├── worker/                   # OCR worker polling Redis
-│   ├── search/                   # Semantic search (ChromaDB + embeddings)
+│   ├── search/                   # Semantic search (ChromaDB + API/local embeddings)
 │   └── agent/                    # ReAct agent for enriched search
 ├── src/                          # Core processing pipeline
 │   ├── pipeline.py               # Main orchestrator (sequential + parallel)
 │   ├── detector.py               # Page type detection (digital/scan/hybrid)
+│   ├── formats/                  # Format registry, validation, dispatcher
+│   │   ├── registry.py           # Supported extensions and content checks
+│   │   ├── dispatcher.py         # Route supported inputs to extractors
+│   │   ├── image.py              # Image OCR extraction
+│   │   ├── docx.py               # DOCX paragraph extraction
+│   │   ├── odt.py                # ODT paragraph extraction
+│   │   └── plain_text.py         # TXT/MD paragraph extraction
 │   ├── extractors/
 │   │   ├── digital.py            # Digital PDF extraction (pdfplumber)
 │   │   ├── ocr.py                # OCR with docTR (PyTorch)
@@ -315,7 +350,8 @@ doc_parser/
 │   ├── models/
 │   │   └── schemas.py            # Pydantic data models
 │   ├── exporters/
-│   │   └── searchable_pdf.py     # Searchable PDF generation
+│   │   ├── searchable_pdf.py     # Searchable PDF generation
+│   │   └── text_pdf.py             # Text-only searchable PDF generation
 │   └── utils/
 │       ├── bbox.py               # Bounding box manipulation
 │       ├── text_normalizer.py    # Text cleanup and normalization
@@ -371,6 +407,7 @@ Tested with a 353-page PDF (27 MB) (248 digital pages, 105 OCR pages, JSON outpu
 - Signatures: not yet handled
 - Advanced layout detection (columns, sections)
 - Form recognition
+- DOCX/ODT/TXT/MD use synthetic layout boxes rather than native page geometry
 
 ## Roadmap
 
@@ -381,6 +418,8 @@ Tested with a 353-page PDF (27 MB) (248 digital pages, 105 OCR pages, JSON outpu
 - MongoDB document persistence
 - Semantic search over indexed chunks
 - AI agent for enriched search (ReAct loop)
+- Multi-format document ingest (PDF, images, DOCX, ODT, TXT, MD)
+- Local sentence-transformers embeddings for semantic search
 
 **Planned:**
 

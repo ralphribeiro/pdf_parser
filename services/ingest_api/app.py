@@ -37,6 +37,13 @@ from services.ingest_api.schemas import (
     SearchResult,
 )
 from services.ingest_api.store import JobStore
+from src.formats.registry import (
+    SUPPORTED_FORMAT_LABEL,
+    UnsupportedFormatError,
+    content_type_for_format,
+    detect_format_from_upload,
+    extension_for_filename,
+)
 
 
 def create_app(
@@ -56,7 +63,10 @@ def create_app(
 
     application = FastAPI(
         title="Ingest API",
-        description="Async document ingest — upload PDFs and track processing status",
+        description=(
+            "Async document ingest — upload supported files "
+            f"({SUPPORTED_FORMAT_LABEL}) and track processing status"
+        ),
         version="0.1.0",
     )
 
@@ -162,7 +172,7 @@ def _register_job_routes(app: FastAPI) -> None:
         "/jobs",
         response_model=Job,
         status_code=202,
-        summary="Upload PDF and create processing job",
+        summary="Upload a supported document and create processing job",
         responses={
             400: {"description": "Invalid file"},
             409: {"description": "Duplicate document"},
@@ -170,20 +180,21 @@ def _register_job_routes(app: FastAPI) -> None:
     )
     async def create_job(
         request: Request,
-        file: UploadFile = File(..., description="PDF file to process"),
+        file: UploadFile = File(..., description="Document file to process"),
     ) -> Job:
-        if not file.filename or not file.filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="File must be a PDF")
-
         content = await file.read()
 
-        if not content or content[:5] != b"%PDF-":
-            raise HTTPException(status_code=400, detail="File is not a valid PDF")
+        try:
+            document_format = detect_format_from_upload(file.filename or "", content)
+            ext = extension_for_filename(file.filename or "")
+        except UnsupportedFormatError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         store: JobStore = request.app.state.store
         doc_store = request.app.state.document_store
         file_hash = _compute_hash(content)
         document_id: str | None = None
+        content_type = content_type_for_format(document_format)
 
         if doc_store is not None:
             existing = doc_store.find_by_hash(file_hash)
@@ -199,14 +210,19 @@ def _register_job_routes(app: FastAPI) -> None:
                 file_hash=file_hash,
                 filename=file.filename,
                 file_size=len(content),
-                pdf_path="",
+                source_path="",
+                content_type=content_type,
             )
-            doc_store.update_pdf_path(document_id, f"data/{document_id}.pdf")
+            doc_store.update_source_path(
+                document_id,
+                f"data/{document_id}{ext}",
+                content_type=content_type,
+            )
 
         job = store.create(filename=file.filename, document_id=document_id)
 
-        pdf_name = document_id if document_id else job.job_id
-        dest: Path = request.app.state.upload_dir / f"{pdf_name}.pdf"
+        storage_name = document_id if document_id else job.job_id
+        dest: Path = request.app.state.upload_dir / f"{storage_name}{ext}"
         dest.write_bytes(content)
 
         if doc_store is not None and document_id is not None:

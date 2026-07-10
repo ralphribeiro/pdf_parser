@@ -268,17 +268,43 @@ class TestPostJobs:
         response = client.post("/jobs")
         assert response.status_code == 422
 
-    def test_non_pdf_returns_400(self, client):
+    def test_supported_text_returns_202(self, client):
         response = client.post(
             "/jobs",
             files={"file": ("document.txt", b"plain text content", "text/plain")},
         )
-        assert response.status_code == 400
+        assert response.status_code == 202
 
-    def test_non_pdf_error_has_detail(self, client):
+    def test_supported_png_returns_202(self, client):
         response = client.post(
             "/jobs",
-            files={"file": ("document.txt", b"plain text content", "text/plain")},
+            files={
+                "file": (
+                    "scan.png",
+                    b"\x89PNG\r\n\x1a\npng content",
+                    "image/png",
+                )
+            },
+        )
+        assert response.status_code == 202
+
+    def test_unsupported_extension_returns_400(self, client):
+        response = client.post(
+            "/jobs",
+            files={
+                "file": (
+                    "document.exe",
+                    b"plain text content",
+                    "application/octet-stream",
+                )
+            },
+        )
+        assert response.status_code == 400
+
+    def test_unsupported_extension_error_has_detail(self, client):
+        response = client.post(
+            "/jobs",
+            files={"file": ("document.exe", b"plain text content", "text/plain")},
         )
         data = response.json()
         assert "detail" in data
@@ -300,6 +326,44 @@ class TestPostJobs:
         job_id = response.json()["job_id"]
         saved = next(tmp_path.glob(f"{job_id}*"))
         assert saved.read_bytes()[:5] == b"%PDF-"
+
+    def test_text_upload_is_saved_with_original_extension(self, client, tmp_path):
+        response = client.post(
+            "/jobs",
+            files={"file": ("notes.txt", b"hello", "text/plain")},
+        )
+        job_id = response.json()["job_id"]
+        assert (tmp_path / f"{job_id}.txt").exists()
+
+    def test_document_store_receives_source_path_and_content_type(self, tmp_path):
+        from unittest.mock import MagicMock
+
+        from fastapi.testclient import TestClient
+        from services.ingest_api.app import create_app
+        from services.ingest_api.store import JobStore
+
+        doc_store = MagicMock()
+        doc_store.find_by_hash.return_value = None
+        doc_store.create_document.return_value = "doc123"
+        app = create_app(
+            upload_dir=tmp_path,
+            store=JobStore(),
+            document_store=doc_store,
+        )
+
+        response = TestClient(app).post(
+            "/jobs",
+            files={"file": ("notes.txt", b"hello", "text/plain")},
+        )
+
+        assert response.status_code == 202
+        doc_store.create_document.assert_called_once()
+        assert (
+            doc_store.create_document.call_args.kwargs["content_type"] == "text/plain"
+        )
+        doc_store.update_source_path.assert_called_once_with(
+            "doc123", "data/doc123.txt", content_type="text/plain"
+        )
 
 
 # =========================================================================

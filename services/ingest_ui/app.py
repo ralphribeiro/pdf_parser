@@ -15,6 +15,13 @@ from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from services.ingest_api.store import JobStore
+from src.formats.registry import (
+    ACCEPT_ATTRIBUTE,
+    SUPPORTED_FORMAT_LABEL,
+    UnsupportedFormatError,
+    detect_format_from_upload,
+    extension_for_filename,
+)
 
 _STATUS_LABELS = {
     "queued": ("Na fila", "info"),
@@ -68,15 +75,13 @@ def _register_routes(app: FastAPI) -> None:
         request: Request,
         file: UploadFile = File(...),
     ) -> HTMLResponse | RedirectResponse:
-        if not file.filename or not file.filename.lower().endswith(".pdf"):
-            return HTMLResponse(
-                _render_upload_page(error="O arquivo deve ser um PDF."),
-                status_code=400,
-            )
-
         content = await file.read()
-        if not content or content[:5] != b"%PDF-":
-            msg = "Conte\u00fado inv\u00e1lido \u2014 o arquivo n\u00e3o \u00e9 um PDF."
+
+        try:
+            detect_format_from_upload(file.filename or "", content)
+            ext = extension_for_filename(file.filename or "")
+        except UnsupportedFormatError as exc:
+            msg = f"Arquivo inv\u00e1lido: {exc}"
             return HTMLResponse(
                 _render_upload_page(error=msg),
                 status_code=400,
@@ -85,7 +90,7 @@ def _register_routes(app: FastAPI) -> None:
         store: JobStore = request.app.state.store
         job = store.create(filename=file.filename)
 
-        dest: Path = request.app.state.upload_dir / f"{job.job_id}.pdf"
+        dest: Path = request.app.state.upload_dir / f"{job.job_id}{ext}"
         dest.write_bytes(content)
 
         return RedirectResponse(url=f"/jobs/{job.job_id}", status_code=303)
@@ -279,8 +284,8 @@ def _render_upload_page(*, error: str | None = None) -> str:
     form = (
         f"{error_html}"
         '<form action="/upload" method="post" enctype="multipart/form-data">'
-        '<label for="file">Selecione um PDF</label>'
-        '<input type="file" id="file" name="file" accept=".pdf">'
+        f'<label for="file">Selecione um documento ({SUPPORTED_FORMAT_LABEL})</label>'
+        f'<input type="file" id="file" name="file" accept="{ACCEPT_ATTRIBUTE}">'
         '<button type="submit">Enviar</button>'
         "</form>"
     )

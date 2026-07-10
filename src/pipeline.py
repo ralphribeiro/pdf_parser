@@ -22,9 +22,12 @@ import pdfplumber
 
 import config
 from src.detector import detect_page_type
+from src.exporters.text_pdf import create_text_pdf
 from src.extractors.digital import extract_digital_page
 from src.extractors.ocr import DocTREngine, extract_ocr_page
 from src.extractors.tables import extract_tables_digital
+from src.formats.dispatcher import process_file as dispatch_process_file
+from src.formats.registry import DocumentFormat, detect_format
 from src.models.schemas import Block, Document, Page
 from src.utils.ocr_postprocess import postprocess_ocr_text
 
@@ -912,6 +915,62 @@ def process_pdf(
         gc.collect()
 
 
+def process_file(
+    source_path: str,
+    output_dir: str | None = None,
+    extract_tables: bool = True,
+    use_gpu: bool | None = None,
+    parallel: bool | None = None,
+    save_pdf: bool | None = None,
+) -> Document:
+    """Process any supported document format and save artifacts."""
+    import gc
+
+    path = Path(source_path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+
+    if detect_format(path) is DocumentFormat.PDF:
+        return process_pdf(
+            str(path),
+            output_dir=output_dir,
+            extract_tables=extract_tables,
+            use_gpu=use_gpu,
+            parallel=parallel,
+            save_pdf=save_pdf,
+        )
+
+    try:
+        document = dispatch_process_file(
+            path,
+            extract_tables=extract_tables,
+            use_gpu=use_gpu,
+            parallel=parallel,
+        )
+
+        if output_dir is None:
+            output_dir = config.OUTPUT_DIR
+
+        output_dir_path = Path(output_dir)
+        output_dir_path.mkdir(parents=True, exist_ok=True)
+
+        _save_document_json(document, output_dir_path / f"{document.doc_id}.json")
+
+        should_save_pdf = (
+            save_pdf
+            if save_pdf is not None
+            else getattr(config, "SEARCHABLE_PDF", False)
+        )
+        if should_save_pdf:
+            create_text_pdf(
+                document, output_dir_path / f"{document.doc_id}_searchable.pdf"
+            )
+
+        return document
+    finally:
+        gc.collect()
+
+
 # =============================================================================
 # Artifact generation contract (Phase 1 — worker interface)
 # =============================================================================
@@ -930,22 +989,32 @@ class ArtifactResult:
     document: Document
 
 
+def _save_document_json(document: Document, output_path: Path) -> None:
+    """Persist a Document model as JSON."""
+    import json
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(document.to_json_dict(), f, indent=2, ensure_ascii=False)
+
+
 def generate_artifacts(
-    pdf_path: str | Path,
+    source_path: str | Path,
     output_dir: str | Path,
     *,
     use_gpu: bool | None = None,
     extract_tables: bool = True,
     parallel: bool | None = None,
 ) -> ArtifactResult:
-    """High-level orchestration: raw PDF -> searchable PDF + JSON.
+    """High-level orchestration: source document -> searchable PDF + JSON.
 
     Always generates both artifacts (unlike process_pdf where the
     searchable PDF is optional).  This is the contract function that
     the async worker will call.
 
     Args:
-        pdf_path: path to the raw PDF file.
+        source_path: path to the raw input file. The old positional
+            ``pdf_path`` call style remains supported.
         output_dir: directory where artifacts will be written.
         use_gpu: force GPU on/off (None = auto-detect).
         extract_tables: attempt table extraction.
@@ -960,36 +1029,51 @@ def generate_artifacts(
     """
     import gc
 
-    pdf_path = Path(pdf_path)
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"File not found: {pdf_path}")
+    source_path = Path(source_path)
+    if not source_path.exists():
+        raise FileNotFoundError(f"File not found: {source_path}")
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    processor = DocumentProcessor(use_gpu=use_gpu)
+    document_format = detect_format(source_path)
+    processor = None
 
     try:
-        use_parallel = (
-            parallel
-            if parallel is not None
-            else getattr(config, "PARALLEL_ENABLED", True)
-        )
+        if document_format is DocumentFormat.PDF:
+            processor = DocumentProcessor(use_gpu=use_gpu)
+            use_parallel = (
+                parallel
+                if parallel is not None
+                else getattr(config, "PARALLEL_ENABLED", True)
+            )
 
-        if use_parallel:
-            document = processor.process_document_parallel(
-                str(pdf_path), extract_tables=extract_tables
+            if use_parallel:
+                document = processor.process_document_parallel(
+                    str(source_path), extract_tables=extract_tables
+                )
+            else:
+                document = processor.process_document(
+                    str(source_path), extract_tables=extract_tables
+                )
+            json_path = output_dir / f"{document.doc_id}.json"
+            processor.save_to_json(document, str(json_path))
+
+            pdf_output_path = output_dir / f"{document.doc_id}_searchable.pdf"
+            processor.save_to_searchable_pdf(
+                document, str(source_path), str(pdf_output_path)
             )
         else:
-            document = processor.process_document(
-                str(pdf_path), extract_tables=extract_tables
+            document = dispatch_process_file(
+                source_path,
+                extract_tables=extract_tables,
+                use_gpu=use_gpu,
+                parallel=parallel,
             )
-
-        json_path = output_dir / f"{document.doc_id}.json"
-        processor.save_to_json(document, str(json_path))
-
-        pdf_output_path = output_dir / f"{document.doc_id}_searchable.pdf"
-        processor.save_to_searchable_pdf(document, str(pdf_path), str(pdf_output_path))
+            json_path = output_dir / f"{document.doc_id}.json"
+            _save_document_json(document, json_path)
+            pdf_output_path = output_dir / f"{document.doc_id}_searchable.pdf"
+            create_text_pdf(document, pdf_output_path)
 
         return ArtifactResult(
             json_path=json_path,
@@ -998,6 +1082,7 @@ def generate_artifacts(
         )
 
     finally:
-        processor.ocr_engine = None
-        processor.tesseract_engine = None
+        if processor is not None:
+            processor.ocr_engine = None
+            processor.tesseract_engine = None
         gc.collect()
