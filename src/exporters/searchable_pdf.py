@@ -290,11 +290,12 @@ def create_searchable_pdf(
     for page_data in document.pages:
         page_idx = page_data.page - 1  # 0-indexed
 
-        if page_idx >= len(reader.pages):
+        if page_idx < 0 or page_idx >= len(reader.pages):
             # More pages in Document than in PDF — skip
             continue
 
         original_page = reader.pages[page_idx]
+        writer_page = writer.add_page(original_page)
 
         if page_data.source == "ocr" and page_data.blocks:
             # Determine original PDF page dimensions (in points)
@@ -307,11 +308,10 @@ def create_searchable_pdf(
                 page_data, page_width_pts, page_height_pts
             )
 
-            # Merge overlay on top of the original page
+            # Merge overlay onto the writer-attached page (pypdf >= 7.0.0
+            # forbids mutating content streams on pages not owned by a writer)
             overlay_reader = pypdf.PdfReader(io.BytesIO(overlay_bytes))
-            original_page.merge_page(overlay_reader.pages[0])
-
-        writer.add_page(original_page)
+            writer_page.merge_page(overlay_reader.pages[0])
 
     with Path(output_path).open("wb") as f:
         writer.write(f)

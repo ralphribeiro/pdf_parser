@@ -144,6 +144,32 @@ class TestCreateSearchablePdf:
         text_p1 = reader.pages[0].extract_text()
         assert "digital" in text_p1.lower() or len(text_p1) > 0
 
+    def test_merge_page_runs_on_writer_attached_page(
+        self, sample_pdf_path, sample_document, output_dir, monkeypatch
+    ):
+        """replace_contents (via merge_page) must only run on writer-owned pages."""
+        from src.exporters.searchable_pdf import create_searchable_pdf
+
+        orig_replace_contents = pypdf.PageObject.replace_contents
+        calls = []
+
+        def checked_replace_contents(page_self, content):
+            assert page_self.indirect_reference is not None
+            assert isinstance(page_self.indirect_reference.pdf, pypdf.PdfWriter)
+            calls.append(page_self)
+            return orig_replace_contents(page_self, content)
+
+        monkeypatch.setattr(
+            pypdf.PageObject, "replace_contents", checked_replace_contents
+        )
+
+        output_path = output_dir / "searchable.pdf"
+        create_searchable_pdf(str(sample_pdf_path), sample_document, str(output_path))
+
+        assert len(calls) == 1
+        reader = pypdf.PdfReader(str(output_path))
+        assert "OCR test text sample" in reader.pages[2].extract_text()
+
 
 # =========================================================================
 # Cycle 3: extractable (searchable) text
