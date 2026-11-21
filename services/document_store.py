@@ -92,6 +92,7 @@ class DocumentStore:
                     "total_pages": total_pages,
                     "status": "processed",
                     "processed_at": datetime.now(),
+                    "error_message": None,
                 }
             },
         )
@@ -110,6 +111,37 @@ class DocumentStore:
         self.collection.update_one(
             {"_id": _to_object_id(document_id)}, {"$set": update}
         )
+
+    def reset_for_reprocessing(
+        self,
+        document_id: str,
+        *,
+        filename: str,
+        source_path: str,
+        content_type: str | None = None,
+    ) -> bool:
+        """Atomically reset a failed document back to pending for reprocessing.
+
+        Returns True when the document was in ``failed`` state and updated,
+        or False if its status was not ``failed`` (e.g. concurrent retry).
+        """
+        update: dict[str, Any] = {
+            "filename": filename,
+            "source_path": source_path,
+            "pdf_path": source_path,
+            "status": "pending",
+            "error_message": None,
+            "processed_at": None,
+            "total_pages": None,
+            "parsed_document": None,
+        }
+        if content_type is not None:
+            update["content_type"] = content_type
+        result = self.collection.update_one(
+            {"_id": _to_object_id(document_id), "status": "failed"},
+            {"$set": update},
+        )
+        return bool(getattr(result, "modified_count", 0))
 
     def list_documents(
         self,

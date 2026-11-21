@@ -142,6 +142,62 @@ def _validate_document_ready(
         )
 
 
+def _resolve_or_create_document(
+    doc_store: Any,
+    *,
+    file_hash: str,
+    filename: str,
+    file_size: int,
+    ext: str,
+    content_type: str,
+) -> str:
+    """Create a new document record or reset a failed one for reprocessing.
+
+    Raises HTTPException(409) when a document with the same hash already
+    exists in a non-failed state (or lost a concurrent retry race).
+    """
+    existing = doc_store.find_by_hash(file_hash)
+    if existing is not None:
+        document_id = str(existing["_id"])
+        if existing.get("status") != "failed":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Document already exists",
+                    "document_id": document_id,
+                },
+            )
+        reset_ok = doc_store.reset_for_reprocessing(
+            document_id,
+            filename=filename,
+            source_path=f"data/{document_id}{ext}",
+            content_type=content_type,
+        )
+        if not reset_ok:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Document already exists",
+                    "document_id": document_id,
+                },
+            )
+        return document_id
+
+    document_id = doc_store.create_document(
+        file_hash=file_hash,
+        filename=filename,
+        file_size=file_size,
+        source_path="",
+        content_type=content_type,
+    )
+    doc_store.update_source_path(
+        document_id,
+        f"data/{document_id}{ext}",
+        content_type=content_type,
+    )
+    return document_id
+
+
 def _register_routes(app: FastAPI) -> None:
     _register_job_routes(app)
     _register_document_routes(app)
@@ -183,51 +239,36 @@ def _register_job_routes(app: FastAPI) -> None:
         file: UploadFile = File(..., description="Document file to process"),
     ) -> Job:
         content = await file.read()
+        filename = file.filename or ""
 
         try:
-            document_format = detect_format_from_upload(file.filename or "", content)
-            ext = extension_for_filename(file.filename or "")
+            document_format = detect_format_from_upload(filename, content)
+            ext = extension_for_filename(filename)
         except UnsupportedFormatError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         store: JobStore = request.app.state.store
         doc_store = request.app.state.document_store
         file_hash = _compute_hash(content)
-        document_id: str | None = None
         content_type = content_type_for_format(document_format)
 
         if doc_store is not None:
-            existing = doc_store.find_by_hash(file_hash)
-            if existing is not None:
-                raise HTTPException(
-                    status_code=409,
-                    detail={
-                        "message": "Document already exists",
-                        "document_id": str(existing["_id"]),
-                    },
-                )
-            document_id = doc_store.create_document(
+            document_id = _resolve_or_create_document(
+                doc_store,
                 file_hash=file_hash,
-                filename=file.filename,
+                filename=filename,
                 file_size=len(content),
-                source_path="",
+                ext=ext,
                 content_type=content_type,
             )
-            doc_store.update_source_path(
-                document_id,
-                f"data/{document_id}{ext}",
-                content_type=content_type,
-            )
+            dest: Path = request.app.state.upload_dir / f"{document_id}{ext}"
+            dest.write_bytes(content)
+            job = store.create(filename=filename, document_id=document_id)
+            return job.model_copy(update={"file_hash": file_hash})
 
-        job = store.create(filename=file.filename, document_id=document_id)
-
-        storage_name = document_id if document_id else job.job_id
-        dest: Path = request.app.state.upload_dir / f"{storage_name}{ext}"
+        job = store.create(filename=filename, document_id=None)
+        dest = request.app.state.upload_dir / f"{job.job_id}{ext}"
         dest.write_bytes(content)
-
-        if doc_store is not None and document_id is not None:
-            job = job.model_copy(update={"file_hash": file_hash})
-
         return job
 
     @app.get(

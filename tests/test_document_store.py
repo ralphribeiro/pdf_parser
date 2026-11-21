@@ -33,19 +33,30 @@ class _FakeCollection:
 
     def find_one(self, query):
         if "_id" in query:
-            return self._docs.get(query["_id"])
+            doc = self._docs.get(query["_id"])
+            if doc is None:
+                return None
+            if all(doc.get(k) == v for k, v in query.items()):
+                return dict(doc)
+            return None
         for doc in self._docs.values():
             if all(doc.get(k) == v for k, v in query.items()):
                 return dict(doc)
         return None
 
     def update_one(self, query, update):
+        from unittest.mock import MagicMock
+
+        result = MagicMock()
         doc = self.find_one(query)
         if doc is None:
-            return
-        oid = query["_id"]
+            result.modified_count = 0
+            return result
+        oid = doc["_id"]
         for key, val in update.get("$set", {}).items():
             self._docs[oid][key] = val
+        result.modified_count = 1
+        return result
 
 
 def _make_store() -> DocumentStore:
@@ -210,12 +221,97 @@ class TestDocumentStoreSourcePath:
             file_size=20,
             source_path="",
         )
-        store.update_source_path(
-            doc_id, "data/notes.txt", content_type="text/plain"
-        )
+        store.update_source_path(doc_id, "data/notes.txt", content_type="text/plain")
 
         doc = store.get_document(doc_id)
         assert doc is not None
         assert doc["source_path"] == "data/notes.txt"
         assert doc["pdf_path"] == "data/notes.txt"
         assert doc["content_type"] == "text/plain"
+
+
+class TestDocumentStoreResetForReprocessing:
+    def test_resets_failed_document_to_pending_and_clears_error(self):
+        store = _make_store()
+        doc_id = store.create_document(
+            file_hash="h6",
+            filename="old.pdf",
+            file_size=500,
+            source_path="data/old.pdf",
+            content_type="application/pdf",
+        )
+        store.save_parsed(doc_id, parsed_document={"pages": [1]}, total_pages=1)
+        store.update_status(doc_id, "failed", error_message="OCR crashed")
+
+        ok = store.reset_for_reprocessing(
+            doc_id,
+            filename="retry.pdf",
+            source_path=f"data/{doc_id}.pdf",
+            content_type="application/pdf",
+        )
+
+        assert ok is True
+        doc = store.get_document(doc_id)
+        assert doc is not None
+        assert doc["status"] == "pending"
+        assert doc["error_message"] is None
+        assert doc["processed_at"] is None
+        assert doc["total_pages"] is None
+        assert doc["parsed_document"] is None
+        assert doc["filename"] == "retry.pdf"
+        assert doc["source_path"] == f"data/{doc_id}.pdf"
+        assert doc["pdf_path"] == f"data/{doc_id}.pdf"
+        assert doc["content_type"] == "application/pdf"
+
+    def test_returns_false_for_non_failed_statuses(self):
+        for status in ("pending", "processing", "processed"):
+            store = _make_store()
+            doc_id = store.create_document(
+                file_hash=f"hash-{status}",
+                filename="orig.pdf",
+                file_size=100,
+                source_path="data/orig.pdf",
+            )
+            if status == "processing":
+                store.update_status(doc_id, "processing")
+            elif status == "processed":
+                store.save_parsed(doc_id, parsed_document={"pages": []}, total_pages=1)
+
+            ok = store.reset_for_reprocessing(
+                doc_id,
+                filename="retry.pdf",
+                source_path="data/retry.pdf",
+                content_type="application/pdf",
+            )
+
+            assert ok is False
+            doc = store.get_document(doc_id)
+            assert doc is not None
+            assert doc["status"] == status
+            assert doc["filename"] == "orig.pdf"
+
+    def test_returns_false_for_missing_document(self):
+        store = _make_store()
+        ok = store.reset_for_reprocessing(
+            "nonexistent_id",
+            filename="retry.pdf",
+            source_path="data/retry.pdf",
+            content_type="application/pdf",
+        )
+        assert ok is False
+
+    def test_save_parsed_clears_previous_error_message(self):
+        store = _make_store()
+        doc_id = store.create_document(
+            file_hash="h7",
+            filename="e.pdf",
+            file_size=100,
+            source_path="data/e.pdf",
+        )
+        store.update_status(doc_id, "failed", error_message="stale error")
+        store.save_parsed(doc_id, parsed_document={"pages": []}, total_pages=1)
+
+        doc = store.get_document(doc_id)
+        assert doc is not None
+        assert doc["status"] == "processed"
+        assert doc["error_message"] is None

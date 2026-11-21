@@ -366,6 +366,261 @@ class TestPostJobs:
         )
 
 
+class _InMemoryDocCollection:
+    """Minimal MongoDB collection stub supporting atomic conditional updates."""
+
+    def __init__(self):
+        self._docs = {}
+        self._counter = 0
+
+    def create_index(self, key, **kwargs):
+        pass
+
+    def insert_one(self, doc):
+        from unittest.mock import MagicMock
+
+        self._counter += 1
+        oid = f"fake_oid_{self._counter:024d}"
+        doc["_id"] = oid
+        self._docs[oid] = dict(doc)
+
+        result = MagicMock()
+        result.inserted_id = oid
+        return result
+
+    def find_one(self, query):
+        if "_id" in query:
+            doc = self._docs.get(query["_id"])
+            if doc is not None and all(doc.get(k) == v for k, v in query.items()):
+                return dict(doc)
+            return None
+        for doc in self._docs.values():
+            if all(doc.get(k) == v for k, v in query.items()):
+                return dict(doc)
+        return None
+
+    def update_one(self, query, update):
+        from unittest.mock import MagicMock
+
+        result = MagicMock()
+        doc = self.find_one(query)
+        if doc is None:
+            result.modified_count = 0
+            return result
+        oid = doc["_id"]
+        for key, val in update.get("$set", {}).items():
+            self._docs[oid][key] = val
+        result.modified_count = 1
+        return result
+
+
+class TestPostJobsDeduplicationAndReprocessing:
+    """Tests for duplicate detection and automatic failed-document reprocessing."""
+
+    @pytest.fixture
+    def client_and_stores(self, tmp_path):
+        from fastapi.testclient import TestClient
+        from services.document_store import DocumentStore
+        from services.ingest_api.app import create_app
+        from services.ingest_api.store import JobStore
+
+        job_store = JobStore()
+        doc_store = DocumentStore(collection=_InMemoryDocCollection())
+        app = create_app(
+            upload_dir=tmp_path,
+            store=job_store,
+            document_store=doc_store,
+        )
+        return TestClient(app), job_store, doc_store
+
+    def test_duplicate_pending_document_returns_409(
+        self, client_and_stores, valid_pdf_bytes
+    ):
+        client, _, _ = client_and_stores
+        first = client.post(
+            "/jobs",
+            files={"file": ("doc.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        assert first.status_code == 202
+
+        second = client.post(
+            "/jobs",
+            files={"file": ("doc.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        assert second.status_code == 409
+        assert second.json()["detail"]["document_id"] == first.json()["document_id"]
+
+    def test_duplicate_processing_document_returns_409(
+        self, client_and_stores, valid_pdf_bytes
+    ):
+        client, _, doc_store = client_and_stores
+        first = client.post(
+            "/jobs",
+            files={"file": ("doc.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        doc_id = first.json()["document_id"]
+        doc_store.update_status(doc_id, "processing")
+
+        second = client.post(
+            "/jobs",
+            files={"file": ("doc.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        assert second.status_code == 409
+        assert second.json()["detail"]["document_id"] == doc_id
+
+    def test_duplicate_processed_document_returns_409(
+        self, client_and_stores, valid_pdf_bytes
+    ):
+        client, _, doc_store = client_and_stores
+        first = client.post(
+            "/jobs",
+            files={"file": ("doc.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        doc_id = first.json()["document_id"]
+        doc_store.save_parsed(doc_id, parsed_document={"pages": []}, total_pages=1)
+
+        second = client.post(
+            "/jobs",
+            files={"file": ("doc.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        assert second.status_code == 409
+        assert second.json()["detail"]["document_id"] == doc_id
+
+    def test_failed_document_is_automatically_reprocessed(
+        self, client_and_stores, valid_pdf_bytes, tmp_path
+    ):
+        client, _, doc_store = client_and_stores
+        first = client.post(
+            "/jobs",
+            files={"file": ("doc.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        assert first.status_code == 202
+        job1 = first.json()
+        doc_id = job1["document_id"]
+
+        doc_store.update_status(doc_id, "failed", error_message="OCR boom")
+
+        second = client.post(
+            "/jobs",
+            files={"file": ("doc-retry.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        assert second.status_code == 202
+        job2 = second.json()
+        assert job2["job_id"] != job1["job_id"]
+        assert job2["document_id"] == doc_id
+        assert job2["status"] == "queued"
+        assert job2["file_hash"] == job1["file_hash"]
+
+        doc = doc_store.get_document(doc_id)
+        assert doc is not None
+        assert doc["status"] == "pending"
+        assert doc["error_message"] is None
+        assert (tmp_path / f"{doc_id}.pdf").read_bytes() == valid_pdf_bytes
+
+        third = client.post(
+            "/jobs",
+            files={"file": ("doc-retry.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        assert third.status_code == 409
+        assert third.json()["detail"]["document_id"] == doc_id
+
+    def test_concurrent_failed_reprocess_race_returns_409(
+        self, valid_pdf_bytes, tmp_path
+    ):
+        from unittest.mock import MagicMock
+
+        from fastapi.testclient import TestClient
+        from services.ingest_api.app import create_app
+        from services.ingest_api.store import JobStore
+
+        job_store = JobStore()
+        doc_store = MagicMock()
+        doc_store.find_by_hash.return_value = {"_id": "doc1", "status": "failed"}
+        doc_store.reset_for_reprocessing.return_value = False
+        app = create_app(upload_dir=tmp_path, store=job_store, document_store=doc_store)
+
+        response = TestClient(app).post(
+            "/jobs",
+            files={"file": ("doc.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["document_id"] == "doc1"
+        assert job_store.count() == 0
+
+    def test_failed_document_reprocesses_end_to_end_with_worker(
+        self, client_and_stores, valid_pdf_bytes, tmp_path
+    ):
+        from services.ingest_api.schemas import JobStatus
+        from services.worker.ocr_worker import OcrWorker
+
+        from src.models.schemas import Document, Page
+        from src.pipeline import ArtifactResult
+
+        client, job_store, doc_store = client_and_stores
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("pypdf failure")
+
+        def _succeed(source_path, out_dir, **kwargs):
+            out_dir.mkdir(parents=True, exist_ok=True)
+            json_p = out_dir / "doc.json"
+            pdf_p = out_dir / "doc_searchable.pdf"
+            json_p.write_text("{}")
+            pdf_p.write_bytes(b"%PDF-1.4 ok")
+            return ArtifactResult(
+                json_path=json_p,
+                pdf_path=pdf_p,
+                document=Document(
+                    doc_id="d1",
+                    source_file=source_path.name,
+                    total_pages=1,
+                    pages=[Page(page=1, source="digital", blocks=[])],
+                ),
+            )
+
+        first = client.post(
+            "/jobs",
+            files={"file": ("doc.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        assert first.status_code == 202
+        job1_id = first.json()["job_id"]
+        doc_id = first.json()["document_id"]
+
+        failing_worker = OcrWorker(
+            store=job_store,
+            upload_dir=tmp_path,
+            output_dir=tmp_path / "out1",
+            artifact_fn=_boom,
+            document_store=doc_store,
+        )
+        assert failing_worker.process_next() is True
+        assert job_store.get(job1_id).status == JobStatus.FAILED
+        assert doc_store.get_document(doc_id)["status"] == "failed"
+
+        second = client.post(
+            "/jobs",
+            files={"file": ("doc.pdf", valid_pdf_bytes, "application/pdf")},
+        )
+        assert second.status_code == 202
+        job2_id = second.json()["job_id"]
+        assert job2_id != job1_id
+        assert second.json()["document_id"] == doc_id
+
+        succeeding_worker = OcrWorker(
+            store=job_store,
+            upload_dir=tmp_path,
+            output_dir=tmp_path / "out2",
+            artifact_fn=_succeed,
+            document_store=doc_store,
+        )
+        assert succeeding_worker.process_next() is True
+        assert job_store.get(job2_id).status == JobStatus.UPLOADED
+        final_doc = doc_store.get_document(doc_id)
+        assert final_doc is not None
+        assert final_doc["status"] == "processed"
+        assert final_doc["error_message"] is None
+
+
 # =========================================================================
 # Cycle A2: GET /jobs/{job_id} endpoint
 # =========================================================================
